@@ -2,15 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  FileTextIcon,
-  LayoutDashboardIcon,
-  PlusIcon,
-  SettingsIcon,
-} from "lucide-react";
+import { CalendarIcon, LayoutDashboardIcon, SettingsIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -24,7 +18,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
@@ -33,6 +26,11 @@ const navItems = [
     title: "Dashboard",
     href: "/",
     icon: LayoutDashboardIcon,
+  },
+  {
+    title: "创建活动",
+    href: "/create-activity",
+    icon: CalendarIcon,
   },
   {
     title: "Settings",
