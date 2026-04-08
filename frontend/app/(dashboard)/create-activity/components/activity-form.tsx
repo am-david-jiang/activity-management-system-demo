@@ -1,7 +1,8 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect } from "react";
+import { useForm } from "@tanstack/react-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,12 +12,70 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Activity, CreateActivityDto } from "@/lib/api";
+import {
+  Field,
+  FieldLabel,
+  FieldContent,
+  FieldError,
+} from "@/components/ui/field";
+import { DatePickerField } from "@/components/form/date-picker-field";
+import { TextInputField } from "@/components/form/text-input-field";
+import { NumberInputField } from "@/components/form/number-input-field";
+import { Activity, CreateActivityDto, UpdateActivityDto } from "@/lib/api";
+
+const activitySchema = z
+  .object({
+    activityName: z.string().min(1, "活动名称不能为空"),
+    startDate: z.date({ message: "开始日期不能为空" }),
+    endDate: z.date({ message: "结束日期不能为空" }),
+    applyEndDate: z.date({ message: "报名截止日期不能为空" }),
+    budget: z.number({ message: "预算不能为空" }).positive("预算必须为正数"),
+  })
+  .refine((data) => data.endDate > data.startDate, {
+    message: "结束日期必须晚于开始日期",
+    path: ["endDate"],
+  })
+  .refine((data) => data.applyEndDate <= data.startDate, {
+    message: "报名截止日期必须不晚于开始日期",
+    path: ["applyEndDate"],
+  });
+
+type ActivityFormValues = z.infer<typeof activitySchema>;
+
+function toFormValues(activity: Activity): ActivityFormValues {
+  return {
+    activityName: activity.activityName,
+    startDate: new Date(activity.startDate),
+    endDate: new Date(activity.endDate),
+    applyEndDate: new Date(activity.applyEndDate),
+    budget: activity.budget,
+  };
+}
+
+function toCreateActivityDto(values: ActivityFormValues): CreateActivityDto {
+  return {
+    activityName: values.activityName,
+    startDate: values.startDate?.toISOString() ?? "",
+    endDate: values.endDate?.toISOString() ?? "",
+    applyEndDate: values.applyEndDate?.toISOString() ?? "",
+    budget: values.budget,
+  };
+}
+
+function toUpdateActivityDto(
+  values: ActivityFormValues,
+  id: number,
+): UpdateActivityDto {
+  return {
+    ...toCreateActivityDto(values),
+    id,
+  };
+}
 
 interface ActivityFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateActivityDto) => void;
+  onSubmit: (data: CreateActivityDto | UpdateActivityDto) => void;
   initialData?: Activity;
   mode: "create" | "edit";
 }
@@ -28,22 +87,39 @@ export function ActivityForm({
   initialData,
   mode,
 }: ActivityFormProps) {
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data: CreateActivityDto = {
-      activityName: formData.get("activityName") as string,
-      startDate: formData.get("startDate") as string,
-      endDate: formData.get("endDate") as string,
-      applyEndDate: formData.get("applyEndDate") as string,
-      budget: Number(formData.get("budget")),
-    };
-    onSubmit(data);
-  };
+  const form = useForm({
+    defaultValues: {
+      activityName: "",
+      startDate: undefined as Date | undefined,
+      endDate: undefined as Date | undefined,
+      applyEndDate: undefined as Date | undefined,
+      budget: 0,
+    },
+    validators: {
+      onSubmit: activitySchema,
+    },
+    onSubmit: ({ value }) => {
+      if (mode === "edit" && initialData) {
+        onSubmit(toUpdateActivityDto(value, initialData.id));
+      } else {
+        onSubmit(toCreateActivityDto(value));
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        form.reset(toFormValues(initialData));
+      } else {
+        form.reset();
+      }
+    }
+  }, [open, initialData, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "创建新活动" : "编辑活动"}
@@ -52,73 +128,106 @@ export function ActivityForm({
             {mode === "create" ? "填写以下信息来创建新活动" : "修改活动信息"}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+        >
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="activityName" className="text-right">
-                活动名称
-              </Label>
-              <Input
-                id="activityName"
-                name="activityName"
-                defaultValue={initialData?.activityName}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="startDate" className="text-right">
-                开始日期
-              </Label>
-              <Input
-                id="startDate"
-                name="startDate"
-                type="date"
-                defaultValue={initialData?.startDate?.split("T")[0]}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="endDate" className="text-right">
-                结束日期
-              </Label>
-              <Input
-                id="endDate"
-                name="endDate"
-                type="date"
-                defaultValue={initialData?.endDate?.split("T")[0]}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="applyEndDate" className="text-right">
-                报名截止日期
-              </Label>
-              <Input
-                id="applyEndDate"
-                name="applyEndDate"
-                type="date"
-                defaultValue={initialData?.applyEndDate?.split("T")[0]}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="budget" className="text-right">
-                预算
-              </Label>
-              <Input
-                id="budget"
-                name="budget"
-                type="number"
-                step="0.01"
-                defaultValue={initialData?.budget}
-                className="col-span-3"
-                required
-              />
-            </div>
+            <form.Field
+              name="activityName"
+              /* eslint-disable-next-line react/no-children-prop */
+              children={(field) => (
+                <TextInputField
+                  name={field.name}
+                  label="活动名称"
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                  onBlur={field.handleBlur}
+                  errors={field.state.meta.errors}
+                />
+              )}
+            />
+
+            <form.Field
+              name="startDate"
+              /* eslint-disable-next-line react/no-children-prop */
+              children={(field) => (
+                <Field orientation="vertical">
+                  <FieldLabel htmlFor={field.name}>
+                    开始日期
+                    <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <FieldContent>
+                    <DatePickerField
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                    />
+                    <FieldError errors={field.state.meta.errors} />
+                  </FieldContent>
+                </Field>
+              )}
+            />
+
+            <form.Field
+              name="endDate"
+              /* eslint-disable-next-line react/no-children-prop */
+              children={(field) => (
+                <Field orientation="vertical">
+                  <FieldLabel htmlFor={field.name}>
+                    结束日期
+                    <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <FieldContent>
+                    <DatePickerField
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                    />
+                    <FieldError errors={field.state.meta.errors} />
+                  </FieldContent>
+                </Field>
+              )}
+            />
+
+            <form.Field
+              name="applyEndDate"
+              /* eslint-disable-next-line react/no-children-prop */
+              children={(field) => (
+                <Field orientation="vertical">
+                  <FieldLabel htmlFor={field.name}>
+                    报名截止日期
+                    <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <FieldContent>
+                    <DatePickerField
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                    />
+                    <FieldError errors={field.state.meta.errors} />
+                  </FieldContent>
+                </Field>
+              )}
+            />
+
+            <form.Field
+              name="budget"
+              /* eslint-disable-next-line react/no-children-prop */
+              children={(field) => (
+                <NumberInputField
+                  name={field.name}
+                  label="预算"
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                  onBlur={field.handleBlur}
+                  errors={field.state.meta.errors}
+                  step={0.01}
+                />
+              )}
+            />
           </div>
           <DialogFooter>
             <Button
@@ -128,7 +237,9 @@ export function ActivityForm({
             >
               取消
             </Button>
-            <Button type="submit">确认</Button>
+            <Button type="submit" disabled={!form.state.canSubmit}>
+              确认
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
