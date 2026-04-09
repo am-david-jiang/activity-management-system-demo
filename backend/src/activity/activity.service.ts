@@ -6,14 +6,17 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Activity } from './entities/activity.entity';
+import { Participant } from './entities/participant.entity';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
+import { ParticipantService } from './participant.service';
 
 @Injectable()
 export class ActivityService {
   constructor(
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
+    private readonly participantService: ParticipantService,
   ) {}
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
@@ -28,6 +31,16 @@ export class ActivityService {
 
   async findAll(): Promise<Activity[]> {
     return this.activityRepository.find();
+  }
+
+  async findActive(): Promise<Activity[]> {
+    const now = new Date();
+    return this.activityRepository
+      .createQueryBuilder('activity')
+      .where('activity.status = :status', { status: 'active' })
+      .andWhere('activity.startDate <= :now', { now })
+      .andWhere('activity.endDate >= :now', { now })
+      .getMany();
   }
 
   async findOne(id: number): Promise<Activity> {
@@ -69,5 +82,38 @@ export class ActivityService {
       throw new BadRequestException('Cannot remove a finished activity');
     }
     await this.activityRepository.remove(activity);
+  }
+
+  async addParticipantToActivity(
+    activityId: number,
+    userId: string,
+  ): Promise<Activity> {
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+      relations: ['participants'],
+    });
+    if (!activity) {
+      throw new NotFoundException(`Activity with ID ${activityId} not found`);
+    }
+
+    const participant = await this.participantService.findOne(userId);
+
+    if (activity.participants.some((p) => p.userId === userId)) {
+      throw new BadRequestException('Participant already in activity');
+    }
+
+    activity.participants.push(participant);
+    return this.activityRepository.save(activity);
+  }
+
+  async getParticipantsByActivityId(activityId: number): Promise<Participant[]> {
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+      relations: ['participants'],
+    });
+    if (!activity) {
+      throw new NotFoundException(`Activity with ID ${activityId} not found`);
+    }
+    return activity.participants;
   }
 }

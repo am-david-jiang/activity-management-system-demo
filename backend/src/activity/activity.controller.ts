@@ -28,9 +28,19 @@ export class ActivityController {
     return this.activityService.findAll();
   }
 
+  @Get('active')
+  findActive() {
+    return this.activityService.findActive();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.activityService.findOne(id);
+  }
+
+  @Get(':id/participants')
+  getParticipants(@Param('id', ParseIntPipe) id: number) {
+    return this.activityService.getParticipantsByActivityId(id);
   }
 
   @Patch(':id')
@@ -51,5 +61,13 @@ export class ActivityController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.activityService.remove(id);
+  }
+
+  @Post(':id/participants/:userId')
+  addParticipantToActivity(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId') userId: string,
+  ) {
+    return this.activityService.addParticipantToActivity(id, userId);
   }
 }
