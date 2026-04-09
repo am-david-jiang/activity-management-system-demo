@@ -39,6 +39,11 @@ const navItems = [
     icon: UsersIcon,
   },
   {
+    title: "活动参与者管理",
+    href: "/activity-participants",
+    icon: UsersIcon,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: SettingsIcon,

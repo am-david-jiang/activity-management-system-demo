@@ -34,12 +34,9 @@ export class ActivityService {
   }
 
   async findActive(): Promise<Activity[]> {
-    const now = new Date();
     return this.activityRepository
       .createQueryBuilder('activity')
       .where('activity.status = :status', { status: 'active' })
-      .andWhere('activity.startDate <= :now', { now })
-      .andWhere('activity.endDate >= :now', { now })
       .getMany();
   }
 
@@ -106,7 +103,9 @@ export class ActivityService {
     return this.activityRepository.save(activity);
   }
 
-  async getParticipantsByActivityId(activityId: number): Promise<Participant[]> {
+  async getParticipantsByActivityId(
+    activityId: number,
+  ): Promise<Participant[]> {
     const activity = await this.activityRepository.findOne({
       where: { id: activityId },
       relations: ['participants'],

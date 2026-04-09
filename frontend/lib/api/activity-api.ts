@@ -90,3 +90,15 @@ export async function finishActivity(id: number): Promise<void> {
   });
   await handleResponse<Activity>(res);
 }
+
+export async function getActiveActivities(): Promise<Activity[]> {
+  const res = await fetch(`${API_BASE}/activities/active`);
+  return (await handleResponse<Activity[]>(res)) ?? [];
+}
+
+export async function getActivityParticipants(
+  activityId: number,
+): Promise<import("./participant-api").Participant[]> {
+  const res = await fetch(`${API_BASE}/activities/${activityId}/participants`);
+  return (await handleResponse<import("./participant-api").Participant[]>(res)) ?? [];
+}

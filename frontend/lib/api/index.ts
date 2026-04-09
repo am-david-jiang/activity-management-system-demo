@@ -8,6 +8,8 @@ export {
   updateActivity,
   deleteActivity,
   finishActivity,
+  getActiveActivities,
+  getActivityParticipants,
 } from "./activity-api";
 
 export {

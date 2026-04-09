@@ -215,15 +215,17 @@ export default function ParticipantsPage() {
         }}
       />
 
-      <Pagination
-        pageIndex={pagination.pageIndex}
-        pageSize={pagination.pageSize}
-        totalCount={data?.total ?? 0}
-        totalPages={Math.ceil((data?.total ?? 0) / pagination.pageSize)}
-        onPageChange={(pageIndex) =>
-          handlePaginationChange({ pageIndex, pageSize: pagination.pageSize })
-        }
-      />
+      {(data?.data.length ?? 0) > 0 && (
+        <Pagination
+          pageIndex={pagination.pageIndex}
+          pageSize={pagination.pageSize}
+          totalCount={data?.total ?? 0}
+          totalPages={Math.ceil((data?.total ?? 0) / pagination.pageSize)}
+          onPageChange={(pageIndex) =>
+            handlePaginationChange({ pageIndex, pageSize: pagination.pageSize })
+          }
+        />
+      )}
 
       <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
         <AlertDialogContent>
