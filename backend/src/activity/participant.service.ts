@@ -16,7 +16,9 @@ export class ParticipantService {
     private readonly activityRepository: Repository<Activity>,
   ) {}
 
-  async create(createParticipantDto: CreateParticipantDto): Promise<Participant> {
+  async create(
+    createParticipantDto: CreateParticipantDto,
+  ): Promise<Participant> {
     const { activityIds, ...rest } = createParticipantDto;
     const participant = this.participantRepository.create(rest as Participant);
 
@@ -65,9 +67,12 @@ export class ParticipantService {
     await this.participantRepository.remove(participant);
   }
 
-  async search(
-    dto: SearchParticipantDto,
-  ): Promise<{ data: Participant[]; total: number; page: number; size: number }> {
+  async search(dto: SearchParticipantDto): Promise<{
+    data: Participant[];
+    total: number;
+    page: number;
+    size: number;
+  }> {
     const { keyword, email, phoneNumber, page = 1, size = 10 } = dto;
     const query = this.participantRepository.createQueryBuilder('p');
 
