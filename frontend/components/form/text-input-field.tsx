@@ -11,10 +11,11 @@ import {
 interface TextInputFieldProps {
   name: string;
   label: string;
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   onBlur: () => void;
   errors?: Array<{ message?: string } | undefined>;
+  required?: boolean;
 }
 
 export function TextInputField({
@@ -24,12 +25,13 @@ export function TextInputField({
   onChange,
   onBlur,
   errors,
+  required = true,
 }: TextInputFieldProps) {
   return (
     <Field orientation="vertical">
       <FieldLabel htmlFor={name}>
         {label}
-        <span className="text-destructive">*</span>
+        {required && <span className="text-destructive">*</span>}
       </FieldLabel>
       <FieldContent>
         <Input

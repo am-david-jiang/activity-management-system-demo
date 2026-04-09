@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, LayoutDashboardIcon, SettingsIcon } from "lucide-react";
+import { CalendarIcon, LayoutDashboardIcon, SettingsIcon, UsersIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Toaster } from "@/components/ui/sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +32,11 @@ const navItems = [
     title: "创建活动",
     href: "/create-activity",
     icon: CalendarIcon,
+  },
+  {
+    title: "参与者管理",
+    href: "/participants",
+    icon: UsersIcon,
   },
   {
     title: "Settings",
@@ -118,6 +124,7 @@ export default function DashboardLayout({
       <SidebarInset>
         <div className="flex flex-1 flex-col">{children}</div>
       </SidebarInset>
+      <Toaster position="top-center" />
     </SidebarProvider>
   );
 }

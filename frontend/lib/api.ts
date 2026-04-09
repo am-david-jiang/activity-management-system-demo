@@ -75,3 +75,101 @@ export async function finishActivity(id: number): Promise<void> {
   });
   await handleResponse<Activity>(res);
 }
+
+// Participant types
+export interface Participant {
+  id: number;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  weixinAccount: string;
+  qqAccount: string;
+  activities: Activity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateParticipantDto {
+  name: string;
+  email?: string;
+  phoneNumber: string;
+  weixinAccount?: string;
+  qqAccount?: string;
+}
+
+export interface UpdateParticipantDto extends Partial<CreateParticipantDto> {}
+
+export interface SearchParticipantDto {
+  keyword?: string;
+  email?: string;
+  phoneNumber?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface PaginatedParticipants {
+  data: Participant[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export async function searchParticipants(
+  params: SearchParticipantDto,
+): Promise<PaginatedParticipants> {
+  const searchParams = new URLSearchParams();
+  if (params.keyword) searchParams.set("keyword", params.keyword);
+  if (params.email) searchParams.set("email", params.email);
+  if (params.phoneNumber) searchParams.set("phoneNumber", params.phoneNumber);
+  searchParams.set("page", String(params.page ?? 1));
+  searchParams.set("size", String(params.size ?? 10));
+
+  const res = await fetch(`${API_BASE}/participants/search?${searchParams}`);
+  return (
+    (await handleResponse<PaginatedParticipants>(res)) ?? {
+      data: [],
+      total: 0,
+      page: 1,
+      size: 10,
+    }
+  );
+}
+
+export async function getParticipant(id: number): Promise<Participant> {
+  const res = await fetch(`${API_BASE}/participants/${id}`);
+  return (await handleResponse<Participant>(res)) as Participant;
+}
+
+export async function createParticipant(
+  data: CreateParticipantDto,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/participants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  await handleResponse<Participant>(res);
+}
+
+export async function updateParticipant(
+  id: number,
+  data: UpdateParticipantDto,
+): Promise<void> {
+  const processedData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    processedData[key] = value || null;
+  }
+  const res = await fetch(`${API_BASE}/participants/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(processedData),
+  });
+  await handleResponse<Participant>(res);
+}
+
+export async function deleteParticipant(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/participants/${id}`, {
+    method: "DELETE",
+  });
+  await handleResponse<void>(res);
+}
