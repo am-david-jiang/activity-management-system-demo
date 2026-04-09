@@ -7,7 +7,6 @@ import {
   Param,
   Delete,
   Query,
-  ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -35,22 +34,22 @@ export class ParticipantController {
     return this.participantService.search(searchDto);
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.participantService.findOne(id);
+  @Get(':user_id')
+  findOne(@Param('user_id') userId: string) {
+    return this.participantService.findOne(userId);
   }
 
-  @Patch(':id')
+  @Patch(':user_id')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('user_id') userId: string,
     @Body() updateParticipantDto: UpdateParticipantDto,
   ) {
-    return this.participantService.update(id, updateParticipantDto);
+    return this.participantService.update(userId, updateParticipantDto);
   }
 
-  @Delete(':id')
+  @Delete(':user_id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.participantService.remove(id);
+  remove(@Param('user_id') userId: string) {
+    return this.participantService.remove(userId);
   }
 }

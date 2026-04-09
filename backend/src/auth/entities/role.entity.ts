@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  ManyToMany,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 
 export enum RoleType {
@@ -16,7 +11,12 @@ export class Role {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'enum', enum: RoleType, default: RoleType.USER, unique: true })
+  @Column({
+    type: 'enum',
+    enum: RoleType,
+    default: RoleType.USER,
+    unique: true,
+  })
   name: RoleType;
 
   @ManyToMany(() => User, (user) => user.roles)

@@ -4,13 +4,18 @@ import {
   Column,
   ManyToMany,
   JoinTable,
+  BeforeInsert,
 } from 'typeorm';
+import { v7 as uuidv7 } from 'uuid';
 import { Activity } from './activity.entity';
 
 @Entity('participants')
 export class Participant {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'varchar', length: 36, name: 'user_id', unique: true })
+  userId: string;
 
   @Column({ type: 'varchar', length: 32 })
   name: string;
@@ -34,4 +39,11 @@ export class Participant {
     inverseJoinColumn: { name: 'activity_id', referencedColumnName: 'id' },
   })
   activities: Activity[];
+
+  @BeforeInsert()
+  generateUserId() {
+    if (!this.userId) {
+      this.userId = uuidv7();
+    }
+  }
 }

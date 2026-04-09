@@ -34,22 +34,24 @@ export class ParticipantService {
     return this.participantRepository.find({ relations: ['activities'] });
   }
 
-  async findOne(id: number): Promise<Participant> {
+  async findOne(userId: string): Promise<Participant> {
     const participant = await this.participantRepository.findOne({
-      where: { id },
+      where: { userId },
       relations: ['activities'],
     });
     if (!participant) {
-      throw new NotFoundException(`Participant with ID ${id} not found`);
+      throw new NotFoundException(
+        `Participant with user_id ${userId} not found`,
+      );
     }
     return participant;
   }
 
   async update(
-    id: number,
+    userId: string,
     updateParticipantDto: UpdateParticipantDto,
   ): Promise<Participant> {
-    const participant = await this.findOne(id);
+    const participant = await this.findOne(userId);
     const { activityIds, ...rest } = updateParticipantDto;
 
     Object.assign(participant, rest);
@@ -62,8 +64,8 @@ export class ParticipantService {
     return this.participantRepository.save(participant);
   }
 
-  async remove(id: number): Promise<void> {
-    const participant = await this.findOne(id);
+  async remove(userId: string): Promise<void> {
+    const participant = await this.findOne(userId);
     await this.participantRepository.remove(participant);
   }
 
