@@ -30,7 +30,7 @@ import { toast } from "sonner";
 
 interface TableMeta {
   onEdit: (participant: Participant) => void;
-  onDelete: (id: number) => void;
+  onDelete: (userId: string) => void;
 }
 
 const columns: ColumnDef<Participant, unknown>[] = [
@@ -87,7 +87,7 @@ const columns: ColumnDef<Participant, unknown>[] = [
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => meta.onDelete(participant.id)}
+            onClick={() => meta.onDelete(participant.userId)}
             disabled={!!participant.activities?.length}
           >
             <TrashIcon className="size-4" />
@@ -107,7 +107,7 @@ export default function ParticipantsPage() {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [pagination, setPagination] = useState({ pageIndex: 1, pageSize: 10 });
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleteErrorAlertOpen, setDeleteErrorAlertOpen] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
 
@@ -130,12 +130,12 @@ export default function ParticipantsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({
-      id,
+      userId,
       data: updateData,
     }: {
-      id: number;
+      userId: string;
       data: Partial<CreateParticipantDto>;
-    }) => updateParticipant(id, updateData),
+    }) => updateParticipant(userId, updateData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["participants"] });
       toast.success("参与者更新成功");
@@ -144,8 +144,10 @@ export default function ParticipantsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteParticipant,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["participants"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["participants"] });
+      toast.success("参与者删除成功");
+    },
   });
 
   const handleCreate = () => {
@@ -168,20 +170,20 @@ export default function ParticipantsPage() {
       });
     } else if (editingParticipant) {
       updateMutation.mutate(
-        { id: editingParticipant.id, data: formData },
+        { userId: editingParticipant.userId, data: formData },
         { onSuccess: () => setDialogOpen(false) },
       );
     }
   };
 
-  const handleDelete = (id: number) => {
-    const participant = data?.data.find((p) => p.id === id);
+  const handleDelete = (userId: string) => {
+    const participant = data?.data.find((p) => p.userId === userId);
     if (participant?.activities?.length) {
       setDeleteErrorMessage("该参与者有参与中的活动，无法删除");
       setDeleteErrorAlertOpen(true);
       return;
     }
-    setDeleteTargetId(id);
+    setDeleteTargetId(userId);
     setDeleteAlertOpen(true);
   };
 

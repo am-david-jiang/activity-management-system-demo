@@ -27,9 +27,24 @@ export interface CreateActivityDto {
   applyEndDate: string;
 }
 
-export interface UpdateActivityDto extends Partial<CreateActivityDto> {}
+export type UpdateActivityDto = Partial<CreateActivityDto>;
 
-async function handleResponse<T>(res: globalThis.Response): Promise<T | null> {
+async function handleResponse<T>(
+  res: globalThis.Response,
+  method?: string,
+): Promise<T | null> {
+  const contentType = res.headers.get("content-type") ?? "";
+  const isJson = contentType.includes("application/json");
+
+  if (method === "DELETE" && res.ok) {
+    return null;
+  }
+
+  if (!isJson) {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return null;
+  }
+
   const json: ApiResponse<T> = await res.json();
   if (!res.ok || !json.success) throw new Error(json.message);
   return json.data;
@@ -66,7 +81,7 @@ export async function deleteActivity(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/activities/${id}`, {
     method: "DELETE",
   });
-  await handleResponse<void>(res);
+  await handleResponse<void>(res, "DELETE");
 }
 
 export async function finishActivity(id: number): Promise<void> {
@@ -78,7 +93,7 @@ export async function finishActivity(id: number): Promise<void> {
 
 // Participant types
 export interface Participant {
-  id: number;
+  userId: string;
   name: string;
   email: string;
   phoneNumber: string;
@@ -135,8 +150,8 @@ export async function searchParticipants(
   );
 }
 
-export async function getParticipant(id: number): Promise<Participant> {
-  const res = await fetch(`${API_BASE}/participants/${id}`);
+export async function getParticipant(userId: string): Promise<Participant> {
+  const res = await fetch(`${API_BASE}/participants/${userId}`);
   return (await handleResponse<Participant>(res)) as Participant;
 }
 
@@ -152,14 +167,14 @@ export async function createParticipant(
 }
 
 export async function updateParticipant(
-  id: number,
+  userId: string,
   data: UpdateParticipantDto,
 ): Promise<void> {
   const processedData: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     processedData[key] = value || null;
   }
-  const res = await fetch(`${API_BASE}/participants/${id}`, {
+  const res = await fetch(`${API_BASE}/participants/${userId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(processedData),
@@ -167,9 +182,9 @@ export async function updateParticipant(
   await handleResponse<Participant>(res);
 }
 
-export async function deleteParticipant(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/participants/${id}`, {
+export async function deleteParticipant(userId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/participants/${userId}`, {
     method: "DELETE",
   });
-  await handleResponse<void>(res);
+  await handleResponse<void>(res, "DELETE");
 }

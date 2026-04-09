@@ -16,7 +16,6 @@ import { TextInputField } from "@/components/form/text-input-field";
 import { Participant, CreateParticipantDto } from "@/lib/api";
 
 const participantSchema = z.object({
-  id: z.number().optional(),
   name: z.string().min(1, "姓名不能为空"),
   email: z.string().optional(),
   phoneNumber: z.string().min(1, "手机号码不能为空"),
