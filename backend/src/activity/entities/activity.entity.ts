@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
 } from 'typeorm';
+import { Participant } from './participant.entity';
 
 @Entity('activities')
 export class Activity {
@@ -34,4 +36,7 @@ export class Activity {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @ManyToMany(() => Participant, (participant) => participant.activities)
+  participants: Participant[];
 }
