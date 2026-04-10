@@ -126,3 +126,8 @@ export async function deleteParticipant(userId: string): Promise<void> {
   });
   await handleResponse<void>(res, "DELETE");
 }
+
+export async function getParticipants(): Promise<Participant[]> {
+  const res = await fetch(`${API_BASE}/participants`);
+  return (await handleResponse<Participant[]>(res)) ?? [];
+}

@@ -102,3 +102,13 @@ export async function getActivityParticipants(
   const res = await fetch(`${API_BASE}/activities/${activityId}/participants`);
   return (await handleResponse<import("./participant-api").Participant[]>(res)) ?? [];
 }
+
+export async function addParticipantToActivity(
+  activityId: number,
+  userId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/activities/${activityId}/participants/${userId}`, {
+    method: "POST",
+  });
+  await handleResponse<void>(res);
+}

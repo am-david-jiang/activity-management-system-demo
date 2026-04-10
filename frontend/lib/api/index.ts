@@ -10,6 +10,7 @@ export {
   finishActivity,
   getActiveActivities,
   getActivityParticipants,
+  addParticipantToActivity,
 } from "./activity-api";
 
 export {
@@ -23,4 +24,5 @@ export {
   createParticipant,
   updateParticipant,
   deleteParticipant,
+  getParticipants,
 } from "./participant-api";

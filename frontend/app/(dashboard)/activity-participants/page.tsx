@@ -6,6 +6,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { Pagination } from "@/components/table/pagination";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,6 +38,8 @@ import {
   getActiveActivities,
   getActivityParticipants,
   deleteParticipant,
+  getParticipants,
+  addParticipantToActivity,
 } from "@/lib/api";
 import { TrashIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -94,6 +105,8 @@ export default function ActivityParticipantsPage() {
   );
   const [pagination, setPagination] = useState({ pageIndex: 1, pageSize: 10 });
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     userId: string;
     name: string;
@@ -116,6 +129,23 @@ export default function ActivityParticipantsPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-participants"] });
       toast.success("参与者删除成功");
       setDeleteAlertOpen(false);
+    },
+  });
+
+  const { data: allParticipantsForSelect = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getParticipants,
+    enabled: addDialogOpen,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: ({ activityId, userId }: { activityId: number; userId: string }) =>
+      addParticipantToActivity(activityId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-participants"] });
+      toast.success("参与者添加成功");
+      setAddDialogOpen(false);
+      setSelectedParticipant(null);
     },
   });
 
@@ -166,7 +196,7 @@ export default function ActivityParticipantsPage() {
       {selectedActivityId !== null && (
         <>
           <div className="mb-4 flex items-center justify-end">
-            <Button>添加参与者</Button>
+            <Button onClick={() => setAddDialogOpen(true)}>添加参与者</Button>
           </div>
 
           <DataTable
@@ -218,6 +248,78 @@ export default function ActivityParticipantsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加参与者</DialogTitle>
+            <DialogDescription>选择一个参与者添加到当前活动</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Field>
+              <FieldLabel>选择参与者</FieldLabel>
+              <FieldContent>
+                <Select
+                  value={selectedParticipant?.userId ?? ""}
+                  onValueChange={(userId) => {
+                    const p = allParticipantsForSelect.find((p) => p.userId === userId);
+                    setSelectedParticipant(p ?? null);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="请选择参与者" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {allParticipantsForSelect.map((p) => (
+                      <SelectItem key={p.userId} value={p.userId}>
+                        {p.name} ({p.email || p.phoneNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldContent>
+            </Field>
+
+            {selectedParticipant && (
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>姓名</FieldLabel>
+                  <Input value={selectedParticipant.name} readOnly />
+                </Field>
+                <Field>
+                  <FieldLabel>电子邮箱</FieldLabel>
+                  <Input value={selectedParticipant.email || "-"} readOnly />
+                </Field>
+                <Field>
+                  <FieldLabel>手机号码</FieldLabel>
+                  <Input value={selectedParticipant.phoneNumber} readOnly />
+                </Field>
+                <Field>
+                  <FieldLabel>微信号</FieldLabel>
+                  <Input value={selectedParticipant.weixinAccount || "-"} readOnly />
+                </Field>
+                <Field>
+                  <FieldLabel>QQ号</FieldLabel>
+                  <Input value={selectedParticipant.qqAccount || "-"} readOnly />
+                </Field>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>取消</Button>
+            <Button
+              disabled={!selectedParticipant}
+              onClick={() => {
+                if (selectedParticipant && selectedActivityId) {
+                  addMutation.mutate({ activityId: selectedActivityId, userId: selectedParticipant.userId });
+                }
+              }}
+            >
+              确认
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
