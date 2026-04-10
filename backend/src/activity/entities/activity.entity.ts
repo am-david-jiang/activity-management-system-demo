@@ -5,8 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToMany,
+  OneToMany,
 } from 'typeorm';
 import { Participant } from './participant.entity';
+import { Event } from './event.entity';
 
 @Entity('activities')
 export class Activity {
@@ -39,4 +41,7 @@ export class Activity {
 
   @ManyToMany(() => Participant, (participant) => participant.activities)
   participants: Participant[];
+
+  @OneToMany(() => Event, (event) => event.activity)
+  events: Event[];
 }
