@@ -28,13 +28,17 @@ export function useSchedulerEvent() {
 interface SchedulerEventProviderProps {
   children: React.ReactNode;
   events: Event[];
-  onEventsChange: (events: Event[]) => void;
+  onAddEvent?: (event: Event) => void;
+  onUpdateEvent?: (event: Event) => void;
+  onRemoveEvent?: (id: number) => void;
 }
 
 export function SchedulerEventProvider({
   children,
   events: initialEvents,
-  onEventsChange,
+  onAddEvent,
+  onUpdateEvent,
+  onRemoveEvent,
 }: SchedulerEventProviderProps) {
   const [events, setEvents] = React.useState(initialEvents);
 
@@ -50,9 +54,9 @@ export function SchedulerEventProvider({
       };
       const updated = [...events, newEvent];
       setEvents(updated);
-      onEventsChange?.(updated);
+      onAddEvent?.(newEvent);
     },
-    [events, onEventsChange],
+    [events, onAddEvent],
   );
 
   const updateEvent = React.useCallback(
@@ -61,18 +65,21 @@ export function SchedulerEventProvider({
         e.id === id ? { ...e, ...updates } : e,
       );
       setEvents(updated);
-      onEventsChange?.(updated);
+      const changedEvent = updated.find((e) => e.id === id);
+      if (changedEvent) {
+        onUpdateEvent?.(changedEvent);
+      }
     },
-    [events, onEventsChange],
+    [events, onUpdateEvent],
   );
 
   const removeEvent = React.useCallback(
     (id: number) => {
       const updated = events.filter((e) => e.id !== id);
       setEvents(updated);
-      onEventsChange?.(updated);
+      onRemoveEvent?.(id);
     },
-    [events, onEventsChange],
+    [events, onRemoveEvent],
   );
 
   const getEventsForDate = React.useCallback(

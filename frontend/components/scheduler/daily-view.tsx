@@ -98,7 +98,7 @@ export function DailyView({ defaultVisibleDate = new Date() }: DailyViewProps) {
   >(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const { getEventsForDate, addEvent } = useSchedulerEvent();
+  const { getEventsForDate } = useSchedulerEvent();
   const dayEvents = getEventsForDate(currentDate);
 
   const positionedEvents = useMemo(() => {
@@ -203,7 +203,7 @@ export function DailyView({ defaultVisibleDate = new Date() }: DailyViewProps) {
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="h-[4.5rem] flex items-start justify-end pr-1 pb-1 text-xs text-muted-foreground leading-none"
+              className="h-18 flex items-start justify-end pr-1 pb-1 text-xs text-muted-foreground leading-none"
             >
               {hour.toString().padStart(2, "0")}:00
             </div>

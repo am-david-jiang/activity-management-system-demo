@@ -64,18 +64,37 @@ type Story = StoryObj<typeof Scheduler>;
 export const DailyView: Story = {
   args: {
     events: mockEvents,
-    onEventsChange: () => {},
+    onAddEvent: () => {},
+    onUpdateEvent: () => {},
+    onRemoveEvent: () => {},
     defaultVisibleDate: new Date("2026-04-12"),
   },
   render: function Renderer(args) {
     const [{ events }, updateArgs] = useArgs();
 
-    function onEventsChange(events: Event[]) {
-      updateArgs({ events });
+    function onAddEvent(event: Event) {
+      const newEvents = [...events, event];
+      updateArgs({ events: newEvents });
+    }
+
+    function onUpdateEvent(event: Event) {
+      const newEvents = events.map((e) => (e.id === event.id ? event : e));
+      updateArgs({ events: newEvents });
+    }
+
+    function onRemoveEvent(id: number) {
+      const newEvents = events.filter((e) => e.id !== id);
+      updateArgs({ events: newEvents });
     }
 
     return (
-      <Scheduler {...args} events={events} onEventsChange={onEventsChange} />
+      <Scheduler
+        {...args}
+        events={events}
+        onAddEvent={onAddEvent}
+        onUpdateEvent={onUpdateEvent}
+        onRemoveEvent={onRemoveEvent}
+      />
     );
   },
 };

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Calendar, CalendarDays } from "lucide-react";
 import { DailyView } from "./daily-view";
+import { WeeklyView } from "./weekly-view";
 import { SchedulerEventProvider } from "./scheduler-event-context";
 import { AddEventForm } from "./add-event-form";
 
@@ -26,20 +27,29 @@ export interface Event {
 
 interface SchedulerProps {
   events: Event[];
-  onEventsChange: (events: Event[]) => void;
+  onAddEvent?: (event: Event) => void;
+  onUpdateEvent?: (event: Event) => void;
+  onRemoveEvent?: (id: number) => void;
   defaultVisibleDate?: Date;
 }
 
 export function Scheduler({
   events,
-  onEventsChange,
+  onAddEvent,
+  onUpdateEvent,
+  onRemoveEvent,
   defaultVisibleDate = new Date(),
 }: SchedulerProps) {
   const [activeTab, setActiveTab] = useState("day");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
-    <SchedulerEventProvider events={events} onEventsChange={onEventsChange}>
+    <SchedulerEventProvider
+      events={events}
+      onAddEvent={onAddEvent}
+      onUpdateEvent={onUpdateEvent}
+      onRemoveEvent={onRemoveEvent}
+    >
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <Tabs
@@ -72,6 +82,9 @@ export function Scheduler({
         </div>
         {activeTab === "day" && (
           <DailyView defaultVisibleDate={defaultVisibleDate} />
+        )}
+        {activeTab === "week" && (
+          <WeeklyView defaultVisibleDay={defaultVisibleDate} />
         )}
       </div>
     </SchedulerEventProvider>

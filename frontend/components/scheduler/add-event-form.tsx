@@ -14,7 +14,6 @@ import {
 import { TextInputField } from "@/components/form/text-input-field";
 import { TextareaField } from "@/components/form/textarea-field";
 import { useSchedulerEvent } from "./scheduler-event-context";
-import type { Event } from "./scheduler";
 
 const addEventSchema = z.object({
   title: z.string().min(1, "标题不能为空"),
@@ -34,7 +33,12 @@ interface AddEventFormProps {
   initialEndDate?: Date;
 }
 
-export function AddEventForm({ isOpen, onSuccess, onCancel, initialStartDate, initialEndDate }: AddEventFormProps) {
+export function AddEventForm({
+  onSuccess,
+  onCancel,
+  initialStartDate,
+  initialEndDate,
+}: AddEventFormProps) {
   const { addEvent } = useSchedulerEvent();
 
   const form = useForm({
