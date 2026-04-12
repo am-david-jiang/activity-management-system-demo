@@ -44,6 +44,11 @@ const navItems = [
     icon: UsersIcon,
   },
   {
+    title: "活动日程安排",
+    href: "/scheduler",
+    icon: CalendarIcon,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: SettingsIcon,

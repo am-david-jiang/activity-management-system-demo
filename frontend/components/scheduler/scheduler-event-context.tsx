@@ -35,51 +35,35 @@ interface SchedulerEventProviderProps {
 
 export function SchedulerEventProvider({
   children,
-  events: initialEvents,
+  events,
   onAddEvent,
   onUpdateEvent,
   onRemoveEvent,
 }: SchedulerEventProviderProps) {
-  const [events, setEvents] = React.useState(initialEvents);
-
-  React.useEffect(() => {
-    setEvents(initialEvents);
-  }, [initialEvents]);
-
   const addEvent = React.useCallback(
     (event: Omit<Event, "id">) => {
       const newEvent: Event = {
         ...event,
         id: Date.now(),
       };
-      const updated = [...events, newEvent];
-      setEvents(updated);
       onAddEvent?.(newEvent);
     },
-    [events, onAddEvent],
+    [onAddEvent],
   );
 
   const updateEvent = React.useCallback(
     (id: number, updates: Partial<Event>) => {
-      const updated = events.map((e) =>
-        e.id === id ? { ...e, ...updates } : e,
-      );
-      setEvents(updated);
-      const changedEvent = updated.find((e) => e.id === id);
-      if (changedEvent) {
-        onUpdateEvent?.(changedEvent);
-      }
+      const changedEvent = { ...events.find((e) => e.id === id), ...updates } as Event;
+      onUpdateEvent?.(changedEvent);
     },
     [events, onUpdateEvent],
   );
 
   const removeEvent = React.useCallback(
     (id: number) => {
-      const updated = events.filter((e) => e.id !== id);
-      setEvents(updated);
       onRemoveEvent?.(id);
     },
-    [events, onRemoveEvent],
+    [onRemoveEvent],
   );
 
   const getEventsForDate = React.useCallback(

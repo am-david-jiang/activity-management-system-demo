@@ -154,6 +154,10 @@ export function WeeklyView({
   const handleGridClick =
     (day: Date) => (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
+      // Don't trigger create if clicking on an existing event item
+      if (target.closest("[data-scheduler-event]")) {
+        return;
+      }
       const grid = target.closest(".day-grid");
       if (!grid) return;
 
@@ -274,7 +278,7 @@ export function WeeklyView({
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="h-18 flex items-start justify-end pr-1 pb-1 text-xs text-muted-foreground leading-none"
+              className="h-[4.5rem] flex items-start justify-end pr-1 pb-1 text-xs text-muted-foreground leading-none"
             >
               {hour.toString().padStart(2, "0")}:00
             </div>
