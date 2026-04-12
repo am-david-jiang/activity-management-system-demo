@@ -42,6 +42,18 @@ export class EventService {
     const eventStartDate = new Date(createEventDto.startDate);
     const eventEndDate = new Date(createEventDto.endDate);
 
+    // Validate event dates are within activity's date range
+    if (eventStartDate < activity.startDate) {
+      throw new BadRequestException(
+        'Event start date must be greater than or equal to activity start date',
+      );
+    }
+    if (eventEndDate > activity.endDate) {
+      throw new BadRequestException(
+        'Event end date must be less than or equal to activity end date',
+      );
+    }
+
     const existingEvents = await this.eventRepository.find({
       where: { activityId },
     });
@@ -113,6 +125,25 @@ export class EventService {
 
     const newStartDate = updateData.startDate ?? event.startDate;
     const newEndDate = updateData.endDate ?? event.endDate;
+
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+    });
+    if (!activity) {
+      throw new NotFoundException(`Activity with ID ${activityId} not found`);
+    }
+
+    // Validate event dates are within activity's date range
+    if (newStartDate < activity.startDate) {
+      throw new BadRequestException(
+        'Event start date must be greater than or equal to activity start date',
+      );
+    }
+    if (newEndDate > activity.endDate) {
+      throw new BadRequestException(
+        'Event end date must be less than or equal to activity end date',
+      );
+    }
 
     const existingEvents = await this.eventRepository.find({
       where: { activityId },
