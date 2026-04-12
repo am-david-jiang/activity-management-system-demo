@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Event } from './entities/event.entity';
@@ -15,16 +19,51 @@ export class EventService {
     private readonly activityRepository: Repository<Activity>,
   ) {}
 
-  async create(activityId: number, createEventDto: CreateEventDto): Promise<Event> {
-    const activity = await this.activityRepository.findOne({ where: { id: activityId } });
+  private hasDateOverlap(
+    start1: Date,
+    end1: Date,
+    start2: Date,
+    end2: Date,
+  ): boolean {
+    return start1 <= end2 && end1 >= start2;
+  }
+
+  async create(
+    activityId: number,
+    createEventDto: CreateEventDto,
+  ): Promise<Event> {
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+    });
     if (!activity) {
       throw new NotFoundException(`Activity with ID ${activityId} not found`);
     }
 
+    const eventStartDate = new Date(createEventDto.startDate);
+    const eventEndDate = new Date(createEventDto.endDate);
+
+    const existingEvents = await this.eventRepository.find({
+      where: { activityId },
+    });
+    for (const existing of existingEvents) {
+      if (
+        this.hasDateOverlap(
+          eventStartDate,
+          eventEndDate,
+          existing.startDate,
+          existing.endDate,
+        )
+      ) {
+        throw new BadRequestException(
+          'Event date range overlaps with existing event',
+        );
+      }
+    }
+
     const event = this.eventRepository.create({
       ...createEventDto,
-      startDate: new Date(createEventDto.startDate),
-      endDate: new Date(createEventDto.endDate),
+      startDate: eventStartDate,
+      endDate: eventEndDate,
       activityId,
     });
 
@@ -32,7 +71,9 @@ export class EventService {
   }
 
   async findAllByActivity(activityId: number): Promise<Event[]> {
-    const activity = await this.activityRepository.findOne({ where: { id: activityId } });
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+    });
     if (!activity) {
       throw new NotFoundException(`Activity with ID ${activityId} not found`);
     }
@@ -48,7 +89,9 @@ export class EventService {
       where: { id: eventId, activityId },
     });
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found for activity ${activityId}`);
+      throw new NotFoundException(
+        `Event with ID ${eventId} not found for activity ${activityId}`,
+      );
     }
     return event;
   }
@@ -66,6 +109,28 @@ export class EventService {
     }
     if (updateEventDto.endDate) {
       updateData.endDate = new Date(updateEventDto.endDate);
+    }
+
+    const newStartDate = updateData.startDate ?? event.startDate;
+    const newEndDate = updateData.endDate ?? event.endDate;
+
+    const existingEvents = await this.eventRepository.find({
+      where: { activityId },
+    });
+    for (const existing of existingEvents) {
+      if (existing.id === eventId) continue;
+      if (
+        this.hasDateOverlap(
+          newStartDate,
+          newEndDate,
+          existing.startDate,
+          existing.endDate,
+        )
+      ) {
+        throw new BadRequestException(
+          'Event date range overlaps with existing event',
+        );
+      }
     }
 
     Object.assign(event, updateData);
