@@ -40,8 +40,11 @@ export class ActivityService {
       .getMany();
   }
 
-  async findOne(id: number): Promise<Activity> {
-    const activity = await this.activityRepository.findOne({ where: { id } });
+  async findOne(id: number, relations?: string[]): Promise<Activity> {
+    const activity = await this.activityRepository.findOne({
+      where: { id },
+      relations,
+    });
     if (!activity) {
       throw new NotFoundException(`Activity with ID ${id} not found`);
     }

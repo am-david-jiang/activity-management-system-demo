@@ -9,7 +9,9 @@
       "mcp__plugin_context7-plugin_context7__query-docs",
       "WebFetch(domain:ui.shadcn.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(npx shadcn@latest:*)"
+      "Bash(npx shadcn@latest:*)",
+      "Search(*)",
+      "Read(*)"
     ]
   }
 }

@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { ActivityModule } from './activity/activity.module';
+import { PosterGenModule } from './poster-gen/poster-gen.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ActivityModule } from './activity/activity.module';
     AuthModule,
     ActivityModule,
     HealthModule,
+    PosterGenModule,
   ],
   controllers: [AppController],
   providers: [AppService],

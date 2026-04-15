@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, LayoutDashboardIcon, SettingsIcon, UsersIcon } from "lucide-react";
+import {
+  BrushIcon,
+  CalendarIcon,
+  LayoutDashboardIcon,
+  SettingsIcon,
+  UsersIcon,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Toaster } from "@/components/ui/sonner";
@@ -47,6 +53,11 @@ const navItems = [
     title: "活动日程安排",
     href: "/scheduler",
     icon: CalendarIcon,
+  },
+  {
+    title: "创建活动海报",
+    href: "/poster-gen",
+    icon: BrushIcon,
   },
   {
     title: "Settings",
