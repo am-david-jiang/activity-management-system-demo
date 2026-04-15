@@ -35,7 +35,6 @@ export const ConceptDirectionSchema = z.object({
   visual_elements: z.array(z.string()).describe('主要视觉元素列表'),
   layout_hints: z.string().describe('布局建议'),
   title_concept: z.string().describe('标题文案方向'),
-  image_prompt: z.string().describe('英文图像生成提示词'),
 });
 
 export const ConceptPlannerSchema = z.object({

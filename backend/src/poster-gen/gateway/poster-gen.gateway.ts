@@ -11,9 +11,6 @@ import { Server, Socket } from 'socket.io';
 import { PosterGenService } from '../service/poster-gen.service';
 import {
   GeneratePosterDto,
-  UserSelectDecisionDto,
-  UserEditDecisionDto,
-  UserRequestNewDecisionDto,
 } from '../dto/generate-poster.dto';
 import { WsMessage } from '../dto/ws-message.dto';
 
@@ -30,7 +27,6 @@ export class PosterGenGateway
   server: Server;
 
   private connectedClients = new Map<string, Socket>();
-  private clientSessionMap = new Map<string, string>(); // clientId -> sessionId
 
   constructor(private readonly posterGenService: PosterGenService) {}
 
@@ -41,7 +37,6 @@ export class PosterGenGateway
 
   handleDisconnect(client: Socket) {
     this.connectedClients.delete(client.id);
-    this.clientSessionMap.delete(client.id);
     console.log(`Client disconnected: ${client.id}`);
   }
 
@@ -73,116 +68,6 @@ export class PosterGenGateway
 
     try {
       for await (const message of this.posterGenService.generatePoster(dto)) {
-        client.emit(message.type, message);
-
-        // Store session ID for concept selection
-        if (message.type === 'concept_options') {
-          this.clientSessionMap.set(client.id, message.sessionId);
-        }
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Internal server error';
-      client.emit('error', {
-        type: 'error',
-        message: errorMessage,
-      } as WsMessage);
-    }
-  }
-
-  @SubscribeMessage('select_concept')
-  async handleSelectConcept(
-    @MessageBody() data: UserSelectDecisionDto,
-    @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    try {
-      const session = this.posterGenService.getSession(data.sessionId);
-      if (!session) {
-        client.emit('error', {
-          type: 'error',
-          message:
-            'Session not found or expired. Please start a new generation.',
-        } as WsMessage);
-        return;
-      }
-
-      const generator = await this.posterGenService.resumeWithSelection(
-        data.sessionId,
-        { type: 'select', directionId: data.directionId },
-        {
-          activityId: session.requirementsResult?.activity?.name ? 0 : 0,
-          requirements: '',
-        },
-      );
-      for await (const message of generator) {
-        client.emit(message.type, message);
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Internal server error';
-      client.emit('error', {
-        type: 'error',
-        message: errorMessage,
-      } as WsMessage);
-    }
-  }
-
-  @SubscribeMessage('edit_concept')
-  async handleEditConcept(
-    @MessageBody() data: UserEditDecisionDto,
-    @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    try {
-      const session = this.posterGenService.getSession(data.sessionId);
-      if (!session) {
-        client.emit('error', {
-          type: 'error',
-          message:
-            'Session not found or expired. Please start a new generation.',
-        } as WsMessage);
-        return;
-      }
-
-      const generator = await this.posterGenService.resumeWithSelection(
-        data.sessionId,
-        { type: 'edit', direction: data.direction },
-        { activityId: 0, requirements: '' },
-      );
-      for await (const message of generator) {
-        client.emit(message.type, message);
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Internal server error';
-      client.emit('error', {
-        type: 'error',
-        message: errorMessage,
-      } as WsMessage);
-    }
-  }
-
-  @SubscribeMessage('request_new_concepts')
-  async handleRequestNewConcepts(
-    @MessageBody() data: UserRequestNewDecisionDto,
-    @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    try {
-      const session = this.posterGenService.getSession(data.sessionId);
-      if (!session) {
-        client.emit('error', {
-          type: 'error',
-          message:
-            'Session not found or expired. Please start a new generation.',
-        } as WsMessage);
-        return;
-      }
-
-      const generator = await this.posterGenService.resumeWithSelection(
-        data.sessionId,
-        { type: 'request_new' },
-        { activityId: 0, requirements: '' },
-      );
-      for await (const message of generator) {
         client.emit(message.type, message);
       }
     } catch (err) {

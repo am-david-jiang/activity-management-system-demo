@@ -57,8 +57,6 @@ export class PosterGenService {
     }
 
     try {
-      yield this.createThinkingMessage('正在分析活动信息和需求...');
-
       const { agent } = this.getOrchestrator();
       const config = { configurable: { thread_id: '6' } };
       const result = await agent.invoke(
@@ -75,20 +73,13 @@ export class PosterGenService {
 
       this.logger.debug(`Orchestrator result: ${JSON.stringify(result)}`);
 
-      const direction = this.extractConceptDirection(result);
-
-      if (!direction) {
-        throw new Error('未能生成创意方向');
-      }
-
-      state.conceptDirection = direction;
       state.currentPhase = 'confirmed';
 
       yield {
         type: 'success',
         message: '海报创意方案已生成，图片生成功能即将上线',
         imageUrl: '',
-        prompt: direction.image_prompt,
+        prompt: 'Success',
       } as SuccessMessage;
     } catch (err) {
       this.logger.error(`Poster generation error: ${err}`);

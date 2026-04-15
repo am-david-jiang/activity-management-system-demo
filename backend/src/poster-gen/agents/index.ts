@@ -4,7 +4,7 @@ export type { RequirementExtractorOutput } from './requirement-extractor';
 
 export {
   createConceptPlannerAgent,
-  generateConceptDirections,
+  generateConceptDirection,
 } from './concept-planner.agent';
 export type {
   ConceptDirection,
