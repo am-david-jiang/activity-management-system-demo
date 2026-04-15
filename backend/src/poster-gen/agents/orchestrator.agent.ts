@@ -10,19 +10,17 @@ const SUPERVISOR_SYSTEM_PROMPT = `You are the coordinator for poster generation 
 
 Available tools:
 1. requirement_extractor - Extract poster design requirements from activity info and user input
-2. concept_planner - Generate 2-4 differentiated poster concept directions from requirements
+2. concept_planner - Generate 1 best poster concept direction from requirements
 
 Workflow:
 1. First call requirement_extractor with activityId and userRequirements
 2. Then call concept_planner with the requirements JSON from step 1
-3. Present all concept directions to the user for selection
-4. Wait for user to select or edit a direction
+3. Confirm the concept direction and inform user image generation is coming soon
 
 Important:
 - You MUST extract requirements first before generating concepts
-- concept_planner returns multiple directions - present them all to the user
-- Do NOT select a direction yourself - wait for explicit user selection
-- After user selection, confirm and inform them image generation is coming soon`;
+- concept_planner returns a single best direction - confirm it directly
+- Inform user that image generation is coming soon after confirming the concept`;
 
 /**
  * Create the poster generation orchestrator agent.
@@ -57,7 +55,6 @@ export interface OrchestratorState {
   activityId: number;
   userRequirements: string;
   requirementsResult?: RequirementExtractorOutput;
-  conceptDirections?: ConceptDirection[];
-  selectedDirection?: ConceptDirection;
-  currentPhase: 'requirements' | 'concepts' | 'selection' | 'confirmed';
+  conceptDirection?: ConceptDirection;
+  currentPhase: 'requirements' | 'concept' | 'confirmed';
 }

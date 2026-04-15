@@ -3,14 +3,13 @@ import { z } from 'zod';
 export type { RequirementExtractorOutput } from './requirement-extractor';
 import type { RequirementExtractorOutput } from './requirement-extractor';
 
-const SYSTEM_PROMPT = `你是一个专业的活动海报创意策划专家。你的任务是基于提取的海报需求，生成2-4个不同风格方向的创意方案供用户选择。
+const SYSTEM_PROMPT = `你是一个专业的活动海报创意策划专家。你的任务是基于提取的海报需求，生成1个最佳风格的创意方案。
 
 【输入信息】
 你会收到一个结构化的需求数据，包含活动信息和海报需求。
 
 【输出格式】
-请生成2-4个差异化的海报方向选项，每个方向包含：
-- direction_id: 方向唯一标识（如 "A", "B", "C"）
+请生成1个最佳海报方向，包含：
 - style: 具体风格描述（如：现代简约、复古国潮、科技未来感、清新文艺）
 - color_palette: 配色方案
   - primary: 主色调（如：#E53935 中国红）
@@ -22,13 +21,11 @@ const SYSTEM_PROMPT = `你是一个专业的活动海报创意策划专家。你
 - image_prompt: 详细的英文图像生成提示词（适合 Midjourney/Stable Diffusion）
 
 【重要提示】
-- 每个方向要有明显差异，避免相似方案
-- 考虑活动类型（学术、文艺、体育、商业等）选择合适风格
+- 选择最符合活动类型的风格
 - image_prompt 要详细具体，描述画面构图、色彩、氛围
 - 颜色使用十六进制格式，如 #FF5733`;
 
 export const ConceptDirectionSchema = z.object({
-  direction_id: z.string().describe('方向唯一标识，如 A、B、C'),
   style: z.string().describe('具体风格描述'),
   color_palette: z.object({
     primary: z.string().describe('主色调'),
@@ -42,7 +39,7 @@ export const ConceptDirectionSchema = z.object({
 });
 
 export const ConceptPlannerSchema = z.object({
-  directions: z.array(ConceptDirectionSchema).describe('海报方向选项列表'),
+  direction: ConceptDirectionSchema.describe('海报方向'),
 });
 
 export type ConceptPlannerOutput = z.infer<typeof ConceptPlannerSchema>;
@@ -60,12 +57,12 @@ export function createConceptPlannerAgent(model: string = 'openai:gpt-5.2') {
 }
 
 /**
- * Generate concept directions from requirement extractor output
+ * Generate concept direction from requirement extractor output
  */
-export async function generateConceptDirections(
+export async function generateConceptDirection(
   requirements: RequirementExtractorOutput,
   model?: string,
-): Promise<ConceptDirection[]> {
+): Promise<ConceptDirection> {
   const agent = createConceptPlannerAgent(model);
 
   const input = `请基于以下活动信息生成海报创意方向：
@@ -87,5 +84,5 @@ ${requirements.activity.events.map((e) => `- ${e.name}: ${e.description}`).join(
     messages: [{ role: 'user', content: input }],
   });
 
-  return (result.structuredResponse as ConceptPlannerOutput).directions;
+  return (result.structuredResponse as ConceptPlannerOutput).direction;
 }

@@ -100,7 +100,8 @@ export class PosterGenGateway
       if (!session) {
         client.emit('error', {
           type: 'error',
-          message: 'Session not found or expired. Please start a new generation.',
+          message:
+            'Session not found or expired. Please start a new generation.',
         } as WsMessage);
         return;
       }
@@ -108,7 +109,10 @@ export class PosterGenGateway
       const generator = await this.posterGenService.resumeWithSelection(
         data.sessionId,
         { type: 'select', directionId: data.directionId },
-        { activityId: session.requirementsResult?.activity?.name ? 0 : 0, requirements: '' },
+        {
+          activityId: session.requirementsResult?.activity?.name ? 0 : 0,
+          requirements: '',
+        },
       );
       for await (const message of generator) {
         client.emit(message.type, message);
@@ -133,7 +137,8 @@ export class PosterGenGateway
       if (!session) {
         client.emit('error', {
           type: 'error',
-          message: 'Session not found or expired. Please start a new generation.',
+          message:
+            'Session not found or expired. Please start a new generation.',
         } as WsMessage);
         return;
       }
@@ -166,7 +171,8 @@ export class PosterGenGateway
       if (!session) {
         client.emit('error', {
           type: 'error',
-          message: 'Session not found or expired. Please start a new generation.',
+          message:
+            'Session not found or expired. Please start a new generation.',
         } as WsMessage);
         return;
       }

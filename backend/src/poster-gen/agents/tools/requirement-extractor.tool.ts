@@ -10,7 +10,9 @@ import {
  * Tool wrapper for the requirement extractor sub-agent.
  * The supervisor agent uses this tool to extract poster requirements.
  */
-export function createRequirementExtractorTool(activityService: ActivityService) {
+export function createRequirementExtractorTool(
+  activityService: ActivityService,
+) {
   return tool(
     async ({
       activityId,
@@ -27,7 +29,9 @@ export function createRequirementExtractorTool(activityService: ActivityService)
         messages: [{ role: 'user', content: input }],
       });
 
-      return JSON.stringify(result.structuredResponse as RequirementExtractorOutput);
+      return JSON.stringify(
+        result.structuredResponse as RequirementExtractorOutput,
+      );
     },
     {
       name: 'requirement_extractor',
@@ -37,7 +41,9 @@ export function createRequirementExtractorTool(activityService: ActivityService)
         'Output: JSON with activity info and poster requirements (style, theme, language, color, size, visualConstraints).',
       schema: z.object({
         activityId: z.number().describe('Activity ID'),
-        userRequirements: z.string().describe('User requirements for poster design'),
+        userRequirements: z
+          .string()
+          .describe('User requirements for poster design'),
       }),
     },
   );
