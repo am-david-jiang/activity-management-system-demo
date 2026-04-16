@@ -2,7 +2,7 @@
 
 import { io, Socket } from "socket.io-client";
 
-export type WsMessageType = "thinking" | "generating" | "success" | "error" | "concept_options" | "waiting_selection";
+export type WsMessageType = "thinking" | "generating" | "success" | "error";
 
 export interface ThinkingMessage {
   type: "thinking";
@@ -28,64 +28,16 @@ export interface ErrorMessage {
   message: string;
 }
 
-export interface ColorPalette {
-  primary: string;
-  secondary: string;
-  accent: string;
-}
-
-export interface ConceptOption {
-  direction_id: string;
-  style: string;
-  color_palette: ColorPalette;
-  visual_elements: string[];
-  layout_hints: string;
-  title_concept: string;
-  image_prompt: string;
-}
-
-export interface ConceptOptionsMessage {
-  type: "concept_options";
-  directions: ConceptOption[];
-  sessionId: string;
-  message: string;
-}
-
-export interface WaitingSelectionMessage {
-  type: "waiting_selection";
-  sessionId: string;
-  message: string;
-}
-
 export type WsMessage =
   | ThinkingMessage
   | GeneratingMessage
   | SuccessMessage
-  | ErrorMessage
-  | ConceptOptionsMessage
-  | WaitingSelectionMessage;
+  | ErrorMessage;
 
 export interface GenerateRequest {
   type: "generate";
   activityId: number;
   requirements: string;
-}
-
-export interface SelectConceptRequest {
-  type: "select_concept";
-  sessionId: string;
-  directionId: string;
-}
-
-export interface EditConceptRequest {
-  type: "edit_concept";
-  sessionId: string;
-  direction: ConceptOption;
-}
-
-export interface RequestNewConceptsRequest {
-  type: "request_new_concepts";
-  sessionId: string;
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8000";
@@ -129,14 +81,11 @@ export class PosterGenWebSocket {
         this.notifyConnectionListeners(false);
       });
 
-      // Listen for all message types
       const messageTypes: WsMessageType[] = [
         "thinking",
         "generating",
         "success",
         "error",
-        "concept_options",
-        "waiting_selection",
       ];
       messageTypes.forEach((type) => {
         this.socket?.on(type, (data: WsMessage) => {
@@ -200,47 +149,6 @@ export class PosterGenWebSocket {
     this.socket.emit("generate", request);
   }
 
-  selectConcept(sessionId: string, directionId: string): void {
-    if (!this.socket?.connected) {
-      throw new Error("WebSocket is not connected");
-    }
-
-    const request: SelectConceptRequest = {
-      type: "select_concept",
-      sessionId,
-      directionId,
-    };
-
-    this.socket.emit("select_concept", request);
-  }
-
-  editConcept(sessionId: string, direction: ConceptOption): void {
-    if (!this.socket?.connected) {
-      throw new Error("WebSocket is not connected");
-    }
-
-    const request: EditConceptRequest = {
-      type: "edit_concept",
-      sessionId,
-      direction,
-    };
-
-    this.socket.emit("edit_concept", request);
-  }
-
-  requestNewConcepts(sessionId: string): void {
-    if (!this.socket?.connected) {
-      throw new Error("WebSocket is not connected");
-    }
-
-    const request: RequestNewConceptsRequest = {
-      type: "request_new_concepts",
-      sessionId,
-    };
-
-    this.socket.emit("request_new_concepts", request);
-  }
-
   onMessage(callback: (message: WsMessage) => void): () => void {
     this.listeners.add(callback);
     return () => {
@@ -268,7 +176,6 @@ export class PosterGenWebSocket {
   }
 }
 
-// Singleton instance
 let instance: PosterGenWebSocket | null = null;
 
 export function getPosterGenSocket(): PosterGenWebSocket {

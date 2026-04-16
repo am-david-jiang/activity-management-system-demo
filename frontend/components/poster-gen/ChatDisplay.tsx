@@ -1,37 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type {
     WsMessage,
-    ConceptOption,
-    ConceptOptionsMessage,
     SuccessMessage,
 } from "@/lib/services/poster-gen.websocket";
 import { Loader2, ImageIcon, AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ConceptSelector } from "./ConceptSelector";
-import { ConceptEditor } from "./ConceptEditor";
 
 interface ChatDisplayProps {
     messages: WsMessage[];
     isGenerating: boolean;
-    onSelectConcept: (sessionId: string, directionId: string) => void;
-    onEditConcept: (sessionId: string, direction: ConceptOption) => void;
-    onRequestNewConcepts: (sessionId: string) => void;
 }
 
 export function ChatDisplay({
     messages,
     isGenerating,
-    onSelectConcept,
-    onEditConcept,
-    onRequestNewConcepts,
 }: ChatDisplayProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [pendingConceptOptions, setPendingConceptOptions] =
-        useState<ConceptOptionsMessage | null>(null);
-    const [editingDirection, setEditingDirection] =
-        useState<ConceptOption | null>(null);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -39,15 +25,7 @@ export function ChatDisplay({
         }
     }, [messages]);
 
-    // Check for concept_options messages
-    useEffect(() => {
-        const conceptMsg = messages.find((m) => m.type === "concept_options");
-        if (conceptMsg && conceptMsg.type === "concept_options") {
-            setPendingConceptOptions(conceptMsg);
-        }
-    }, [messages]);
-
-    if (messages.length === 0 && !isGenerating && !pendingConceptOptions) {
+    if (messages.length === 0 && !isGenerating) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <ImageIcon className="h-12 w-12 mb-4 opacity-50" />
@@ -56,59 +34,12 @@ export function ChatDisplay({
         );
     }
 
-    const handleSelect = (directionId: string) => {
-        if (pendingConceptOptions?.sessionId) {
-            onSelectConcept(pendingConceptOptions.sessionId, directionId);
-            setPendingConceptOptions(null);
-        }
-    };
-
-    const handleEdit = (direction: ConceptOption) => {
-        setEditingDirection(direction);
-    };
-
-    const handleEditSave = (direction: ConceptOption) => {
-        if (pendingConceptOptions?.sessionId) {
-            onEditConcept(pendingConceptOptions.sessionId, direction);
-            setPendingConceptOptions(null);
-            setEditingDirection(null);
-        }
-    };
-
-    const handleRequestNew = () => {
-        if (pendingConceptOptions?.sessionId) {
-            onRequestNewConcepts(pendingConceptOptions.sessionId);
-            setPendingConceptOptions(null);
-        }
-    };
-
     return (
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
             <div className="space-y-4">
                 {messages.map((message, index) => (
                     <MessageBubble key={index} message={message} />
                 ))}
-
-                {/* Concept Selection UI */}
-                {pendingConceptOptions && !editingDirection && (
-                    <ConceptSelector
-                        directions={pendingConceptOptions.directions}
-                        sessionId={pendingConceptOptions.sessionId}
-                        onSelect={handleSelect}
-                        onEdit={handleEdit}
-                        onRequestNew={handleRequestNew}
-                        isLoading={isGenerating}
-                    />
-                )}
-
-                {/* Concept Editor UI */}
-                {editingDirection && (
-                    <ConceptEditor
-                        direction={editingDirection}
-                        onSave={handleEditSave}
-                        onCancel={() => setEditingDirection(null)}
-                    />
-                )}
 
                 {isGenerating && <GeneratingIndicator />}
             </div>
@@ -161,11 +92,6 @@ function MessageBubble({ message }: { message: WsMessage }) {
                     </div>
                 </div>
             );
-
-        case "concept_options":
-        case "waiting_selection":
-            // These are handled by ConceptSelector component
-            return null;
 
         default:
             return null;
