@@ -57,7 +57,7 @@ export type RequirementExtractorOutput = z.infer<
 
 export function createRequirementExtractorAgent(
   activityService: ActivityService,
-  model: string = 'openai:gpt-5.2',
+  model: string = 'openai:gpt-5.4',
 ) {
   const getActivityInfoTool = createGetActivityInfoTool(activityService);
 

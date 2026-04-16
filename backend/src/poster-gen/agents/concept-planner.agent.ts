@@ -18,7 +18,6 @@ const SYSTEM_PROMPT = `你是一个专业的活动海报创意策划专家。你
 - visual_elements: 主要视觉元素列表（如：灯笼、祥云、梅花、龙纹等）
 - layout_hints: 布局建议描述
 - title_concept: 标题文案方向
-- image_prompt: 详细的英文图像生成提示词（适合 Midjourney/Stable Diffusion）
 
 【重要提示】
 - 选择最符合活动类型的风格
@@ -44,7 +43,7 @@ export const ConceptPlannerSchema = z.object({
 export type ConceptPlannerOutput = z.infer<typeof ConceptPlannerSchema>;
 export type ConceptDirection = z.infer<typeof ConceptDirectionSchema>;
 
-export function createConceptPlannerAgent(model: string = 'openai:gpt-5.2') {
+export function createConceptPlannerAgent(model: string = 'openai:gpt-5.4') {
   const agent = createAgent({
     model,
     tools: [],

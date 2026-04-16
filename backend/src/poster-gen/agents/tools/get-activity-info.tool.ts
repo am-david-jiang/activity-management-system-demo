@@ -1,6 +1,9 @@
 import { tool } from '@langchain/core/tools';
 import z from 'zod';
+import { Logger } from '@nestjs/common';
 import type { ActivityService } from '../../../activity/activity.service';
+
+const logger = new Logger('GetActivityInfoTool');
 
 /**
  * Creates a LangChain tool that retrieves activity information by ID.
@@ -9,23 +12,39 @@ import type { ActivityService } from '../../../activity/activity.service';
 export function createGetActivityInfoTool(activityService: ActivityService) {
   return tool(
     async ({ activityId }: { activityId: number }) => {
-      const activity = await activityService.findOne(activityId, ['events']);
+      try {
+        logger.log(
+          `Invoking get_activity_info tool with activityId: ${activityId}`,
+        );
+        const activity = await activityService.findOne(activityId, ['events']);
 
-      return JSON.stringify({
-        id: activity.id,
-        name: activity.activityName,
-        startDate: activity.startDate.toString(),
-        endDate: activity.endDate.toString(),
-        budget: activity.budget,
-        applyEndDate: activity.applyEndDate.toString(),
-        status: activity.status,
-        events: (activity.events ?? []).map((event) => ({
-          name: event.title,
-          description: event.description ?? '',
-          datetime: event.startDate.toString(),
-          location: event.address,
-        })),
-      });
+        logger.log(
+          `get_activity_info tool returned activity: ${activity.activityName}`,
+        );
+        return JSON.stringify({
+          id: activity.id,
+          name: activity.activityName,
+          startDate: activity.startDate.toString(),
+          endDate: activity.endDate.toString(),
+          budget: activity.budget,
+          applyEndDate: activity.applyEndDate.toString(),
+          status: activity.status,
+          events: (activity.events ?? []).map((event) => ({
+            name: event.title,
+            description: event.description ?? '',
+            datetime: event.startDate.toString(),
+            location: event.address,
+          })),
+        });
+      } catch (error) {
+        logger.error(
+          `get_activity_info tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        return JSON.stringify({
+          error: `get_activity_info failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
     },
     {
       name: 'get_activity_info',

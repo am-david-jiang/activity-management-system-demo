@@ -15,4 +15,7 @@ export { createRequirementExtractorTool } from './tools/requirement-extractor.to
 export { createConceptPlannerTool } from './tools/concept-planner.tool';
 
 export { createOrchestratorAgent } from './orchestrator.agent';
-export type { OrchestratorState } from './orchestrator.agent';
+export type {
+  OrchestratorState,
+  OrchestratorResponse,
+} from './orchestrator.agent';

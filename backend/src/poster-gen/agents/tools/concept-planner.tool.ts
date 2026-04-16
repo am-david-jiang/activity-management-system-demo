@@ -1,5 +1,6 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
+import { Logger } from '@nestjs/common';
 import {
   createConceptPlannerAgent,
   type ConceptDirection,
@@ -8,6 +9,8 @@ import {
   RequirementExtractorSchema,
   type RequirementExtractorOutput,
 } from '../requirement-extractor';
+
+const logger = new Logger('ConceptPlannerTool');
 
 /**
  * Tool wrapper for the concept planner sub-agent.
@@ -20,6 +23,9 @@ export function createConceptPlannerTool() {
     }: {
       requirementsJson: string;
     }): Promise<string> => {
+      logger.log(
+        `Invoking concept_planner tool with requirementsJson: ${requirementsJson}`,
+      );
       let requirements: RequirementExtractorOutput;
       try {
         requirements = RequirementExtractorSchema.parse(
@@ -37,7 +43,8 @@ export function createConceptPlannerTool() {
         );
       }
 
-      const input = `请基于以下活动信息生成海报创意方向：
+      try {
+        const input = `请基于以下活动信息生成海报创意方向：
 
 活动名称：${requirements.activity.name}
 活动时间：${requirements.activity.startDate} 至 ${requirements.activity.endDate}
@@ -52,17 +59,29 @@ ${requirements.activity.events.map((e) => `- ${e.name}: ${e.description}`).join(
 尺寸：${requirements.poster.size}
 视觉约束：${requirements.poster.visualConstraints.join('、')}`;
 
-      const agent = createConceptPlannerAgent();
+        const agent = createConceptPlannerAgent();
 
-      const result = await agent.invoke({
-        messages: [{ role: 'user', content: input }],
-      });
+        const result = await agent.invoke({
+          messages: [{ role: 'user', content: input }],
+        });
 
-      const direction = (
-        result.structuredResponse as { direction: ConceptDirection }
-      ).direction;
+        const direction = (
+          result.structuredResponse as { direction: ConceptDirection }
+        ).direction;
 
-      return JSON.stringify({ direction });
+        logger.log(
+          `concept_planner tool returned direction: ${JSON.stringify(direction)}`,
+        );
+        return JSON.stringify({ direction });
+      } catch (error) {
+        logger.error(
+          `concept_planner tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        return JSON.stringify({
+          error: `concept_planner failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
     },
     {
       name: 'concept_planner',

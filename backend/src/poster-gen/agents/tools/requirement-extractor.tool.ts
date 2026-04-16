@@ -1,10 +1,13 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
+import { Logger } from '@nestjs/common';
 import type { ActivityService } from '../../../activity/activity.service';
 import {
   createRequirementExtractorAgent,
   type RequirementExtractorOutput,
 } from '../requirement-extractor';
+
+const logger = new Logger('RequirementExtractorTool');
 
 /**
  * Tool wrapper for the requirement extractor sub-agent.
@@ -21,17 +24,33 @@ export function createRequirementExtractorTool(
       activityId: number;
       userRequirements: string;
     }): Promise<string> => {
-      const agent = createRequirementExtractorAgent(activityService);
+      try {
+        logger.log(
+          `Invoking requirement_extractor tool with activityId: ${activityId}, userRequirements: ${userRequirements}`,
+        );
+        const agent = createRequirementExtractorAgent(activityService);
 
-      const input = `活动ID: ${activityId}\n用户需求描述: ${userRequirements}`;
+        const input = `活动ID: ${activityId}\n用户需求描述: ${userRequirements}`;
 
-      const result = await agent.invoke({
-        messages: [{ role: 'user', content: input }],
-      });
+        const result = await agent.invoke({
+          messages: [{ role: 'user', content: input }],
+        });
 
-      return JSON.stringify(
-        result.structuredResponse as RequirementExtractorOutput,
-      );
+        logger.log(
+          `requirement_extractor tool returned: ${JSON.stringify(result.structuredResponse)}`,
+        );
+        return JSON.stringify(
+          result.structuredResponse as RequirementExtractorOutput,
+        );
+      } catch (error) {
+        logger.error(
+          `requirement_extractor tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        return JSON.stringify({
+          error: `requirement_extractor failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
     },
     {
       name: 'requirement_extractor',

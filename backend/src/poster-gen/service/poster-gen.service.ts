@@ -1,22 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ActivityService } from '../../activity/activity.service';
 import { PosterGenerationLog } from '../entities/poster-generation-log.entity';
 import { GeneratePosterDto } from '../dto/generate-poster.dto';
-import {
-  WsMessage,
-  SuccessMessage,
-  ErrorMessage,
-  ThinkingMessage,
-} from '../dto/ws-message.dto';
+import { WsMessage, SuccessMessage, ErrorMessage } from '../dto/ws-message.dto';
 import {
   createOrchestratorAgent,
+  OrchestratorResponse,
   type OrchestratorState,
 } from '../agents/orchestrator.agent';
-import type { ConceptDirection } from '../agents/concept-planner.agent';
 import type { ReactAgent } from 'langchain';
+import type { PosterGenGateway } from '../gateway/poster-gen.gateway';
 
 @Injectable()
 export class PosterGenService {
@@ -41,6 +39,8 @@ export class PosterGenService {
 
   async *generatePoster(
     dto: GeneratePosterDto,
+    clientId: string,
+    gateway: PosterGenGateway,
     sessionId?: string,
   ): AsyncGenerator<WsMessage, void, unknown> {
     const sid = sessionId ?? uuidv4();
@@ -73,14 +73,32 @@ export class PosterGenService {
 
       this.logger.debug(`Orchestrator result: ${JSON.stringify(result)}`);
 
-      state.currentPhase = 'confirmed';
+      const response = result.structuredResponse as OrchestratorResponse;
 
-      yield {
-        type: 'success',
-        message: '海报创意方案已生成，图片生成功能即将上线',
-        imageUrl: '',
-        prompt: 'Success',
-      } as SuccessMessage;
+      if (response.success) {
+        state.currentPhase = 'confirmed';
+
+        if (response.imageUrl && fs.existsSync(response.imageUrl)) {
+          const imageBuffer = fs.readFileSync(response.imageUrl);
+          const filename = path.basename(response.imageUrl);
+          const mimeType = filename.endsWith('.png')
+            ? 'image/png'
+            : 'image/jpeg';
+          gateway.emitImageBinary(clientId, imageBuffer, filename, mimeType);
+        }
+
+        yield {
+          type: 'success',
+          imageUrl: response.imageUrl ?? '',
+          message: '海报生成成功',
+        } as SuccessMessage;
+      } else {
+        this.sessions.delete(sid);
+        yield {
+          type: 'error',
+          message: response.error ?? '生成失败',
+        } as ErrorMessage;
+      }
     } catch (err) {
       this.logger.error(`Poster generation error: ${err}`);
       yield {
@@ -93,45 +111,5 @@ export class PosterGenService {
 
   getSession(sessionId: string): OrchestratorState | undefined {
     return this.sessions.get(sessionId);
-  }
-
-  private createThinkingMessage(content: string): ThinkingMessage {
-    return { type: 'thinking', content };
-  }
-
-  private extractConceptDirection(
-    result: unknown,
-  ): ConceptDirection | undefined {
-    const response = result as {
-      structuredResponse?: { direction?: ConceptDirection };
-      messages?: Array<{ content: string }>;
-    };
-
-    if (response.structuredResponse?.direction) {
-      return response.structuredResponse.direction;
-    }
-
-    if (response.messages && response.messages.length > 0) {
-      const lastMessage = response.messages[response.messages.length - 1];
-      if (lastMessage.content) {
-        const jsonMatch = lastMessage.content.match(
-          /\{[\s\S]*"direction"[\s\S]*\}/,
-        );
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[0]) as {
-              direction?: ConceptDirection;
-            };
-            if (parsed.direction) {
-              return parsed.direction;
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-    }
-
-    return undefined;
   }
 }
