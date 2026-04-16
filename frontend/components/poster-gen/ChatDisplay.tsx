@@ -7,7 +7,7 @@ import type {
     ConceptOptionsMessage,
     SuccessMessage,
 } from "@/lib/services/poster-gen.websocket";
-import { Loader2, ImageIcon, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ImageIcon, AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConceptSelector } from "./ConceptSelector";
 import { ConceptEditor } from "./ConceptEditor";
@@ -173,6 +173,17 @@ function MessageBubble({ message }: { message: WsMessage }) {
 }
 
 function SuccessMessageBubble({ message }: { message: SuccessMessage }) {
+    const handleDownload = () => {
+        if (message.blobUrl && message.filename) {
+            const link = document.createElement('a');
+            link.href = message.blobUrl;
+            link.download = message.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
     return (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
             <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
@@ -181,13 +192,20 @@ function SuccessMessageBubble({ message }: { message: SuccessMessage }) {
                     {message.message}
                 </p>
                 {message.blobUrl && (
-                    <div className="mt-3 rounded-lg overflow-hidden bg-white dark:bg-black border border-border">
+                    <div className="mt-3 relative rounded-lg overflow-hidden bg-white dark:bg-black border border-border">
                         <img
                             src={message.blobUrl}
                             alt="生成的海报"
                             className="max-w-full h-auto"
                             loading="lazy"
                         />
+                        <button
+                            onClick={handleDownload}
+                            className="absolute top-2 right-2 flex items-center gap-1.5 px-3 py-1.5 bg-black/60 hover:bg-black/80 text-white text-sm rounded-md transition-colors"
+                        >
+                            <Download className="h-4 w-4" />
+                            <span>下载海报</span>
+                        </button>
                     </div>
                 )}
             </div>
