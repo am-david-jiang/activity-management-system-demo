@@ -7,13 +7,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { ActivityService } from '../../activity/activity.service';
 import { PosterGenerationLog } from '../entities/poster-generation-log.entity';
 import { GeneratePosterDto } from '../dto/generate-poster.dto';
-import { WsMessage, SuccessMessage, ErrorMessage } from '../dto/ws-message.dto';
+import {
+  WsMessage,
+  SuccessMessage,
+  ErrorMessage,
+  ToolCallMessage,
+} from '../dto/ws-message.dto';
 import {
   createOrchestratorAgent,
   OrchestratorResponse,
   type OrchestratorState,
 } from '../agents/orchestrator.agent';
-import type { ReactAgent } from 'langchain';
+import { AIMessage, ToolMessage, type ReactAgent } from 'langchain';
 
 @Injectable()
 export class PosterGenService {
@@ -56,8 +61,12 @@ export class PosterGenService {
 
     try {
       const { agent } = this.getOrchestrator();
-      const config = { configurable: { thread_id: '6' } };
-      const result = await agent.invoke(
+      const config = {
+        configurable: { thread_id: sid },
+        streamMode: 'updates' as const,
+      };
+
+      const stream = await agent.stream(
         {
           messages: [
             {
@@ -69,22 +78,60 @@ export class PosterGenService {
         config,
       );
 
-      this.logger.debug(`Orchestrator result: ${JSON.stringify(result)}`);
+      let finalResponse: OrchestratorResponse | null = null;
 
-      const response = result.structuredResponse as OrchestratorResponse;
+      for await (const chunk of stream) {
+        const entries = Object.entries(chunk);
+        const [, content] = entries[0];
 
-      if (response.success) {
+        const messages = content.messages ?? [];
+        for (const msg of messages) {
+          if (content.structuredResponse) {
+            finalResponse = content.structuredResponse as OrchestratorResponse;
+            continue;
+          }
+
+          if (msg instanceof ToolMessage) {
+            const name = msg.name;
+            yield {
+              type: 'generating',
+              content: `工具 ${name} 执行完成`,
+            } as { type: 'generating'; content: string };
+          } else {
+            const toolCalls = (msg as AIMessage).tool_calls ?? [];
+            for (const toolCall of toolCalls) {
+              yield {
+                type: 'tool_call',
+                toolName: toolCall.name ?? 'unknown',
+                input: toolCall.args as Record<string, unknown>,
+              } as ToolCallMessage;
+            }
+          }
+        }
+      }
+
+      if (!finalResponse) {
+        yield {
+          type: 'error',
+          message: '未收到生成结果',
+        } as ErrorMessage;
+        this.sessions.delete(sid);
+        return;
+      }
+
+      if (finalResponse.success) {
         state.currentPhase = 'confirmed';
 
         const filename =
-          response.filename ?? path.basename(response.imageUrl ?? 'poster.png');
+          finalResponse.filename ??
+          path.basename(finalResponse.imageUrl ?? 'poster.png');
         const mimeType =
-          response.mimeType ??
+          finalResponse.mimeType ??
           (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
         let buffer: ArrayBuffer | undefined;
-        if (response.imageUrl && fs.existsSync(response.imageUrl)) {
-          const imageBuffer = fs.readFileSync(response.imageUrl);
+        if (finalResponse.imageUrl && fs.existsSync(finalResponse.imageUrl)) {
+          const imageBuffer = fs.readFileSync(finalResponse.imageUrl);
           buffer = imageBuffer.buffer;
         }
 
@@ -99,7 +146,7 @@ export class PosterGenService {
         this.sessions.delete(sid);
         yield {
           type: 'error',
-          message: response.error ?? '生成失败',
+          message: finalResponse.error ?? '生成失败',
         } as ErrorMessage;
       }
     } catch (err) {
