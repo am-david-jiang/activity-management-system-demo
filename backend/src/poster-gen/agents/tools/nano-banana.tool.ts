@@ -117,7 +117,7 @@ export function createNanoBananaTool() {
         logger.log(
           `generate_image_nano_banana tool successfully generated image: ${filepath}`,
         );
-        return JSON.stringify({ imageUrl: filepath, mimeType });
+        return JSON.stringify({ imageUrl: filepath, mimeType, filename });
       } catch (error) {
         logger.error(
           `generate_image_nano_banana tool failed: ${error instanceof Error ? error.message : String(error)}`,

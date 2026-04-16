@@ -14,7 +14,6 @@ import {
   type OrchestratorState,
 } from '../agents/orchestrator.agent';
 import type { ReactAgent } from 'langchain';
-import type { PosterGenGateway } from '../gateway/poster-gen.gateway';
 
 @Injectable()
 export class PosterGenService {
@@ -40,7 +39,6 @@ export class PosterGenService {
   async *generatePoster(
     dto: GeneratePosterDto,
     clientId: string,
-    gateway: PosterGenGateway,
     sessionId?: string,
   ): AsyncGenerator<WsMessage, void, unknown> {
     const sid = sessionId ?? uuidv4();
@@ -78,19 +76,24 @@ export class PosterGenService {
       if (response.success) {
         state.currentPhase = 'confirmed';
 
+        const filename =
+          response.filename ?? path.basename(response.imageUrl ?? 'poster.png');
+        const mimeType =
+          response.mimeType ??
+          (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
+
+        let buffer: ArrayBuffer | undefined;
         if (response.imageUrl && fs.existsSync(response.imageUrl)) {
           const imageBuffer = fs.readFileSync(response.imageUrl);
-          const filename = path.basename(response.imageUrl);
-          const mimeType = filename.endsWith('.png')
-            ? 'image/png'
-            : 'image/jpeg';
-          gateway.emitImageBinary(clientId, imageBuffer, filename, mimeType);
+          buffer = imageBuffer.buffer;
         }
 
         yield {
           type: 'success',
-          imageUrl: response.imageUrl ?? '',
+          filename,
+          mimeType,
           message: '海报生成成功',
+          buffer,
         } as SuccessMessage;
       } else {
         this.sessions.delete(sid);

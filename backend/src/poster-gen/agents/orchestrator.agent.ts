@@ -25,7 +25,7 @@ Workflow:
 
 Output Requirements:
 - After generate_image_nano_banana returns, parse the JSON result
-- If the result contains image_url, output: {"success": true, "imageUrl": "<url>", "mimeType": "<mimeType>"}
+- If the result contains image_url, output: {"success": true, "imageUrl": "<url>", "mimeType": "<mimeType>", "filename": "<filename>"}
 - If the result contains error, output: {"success": false, "error": "<error message>"}
 - NEVER ask for clarification or additional information - proceed autonomously with reasonable defaults when information is missing or unclear
 
@@ -45,6 +45,12 @@ const OrchestratorResponseSchema = z.object({
     .nullable()
     .describe(
       'MIME type of generated image (when success is true, e.g., "image/png")',
+    ),
+  filename: z
+    .string()
+    .nullable()
+    .describe(
+      'Filename of generated image (when success is true, e.g., "nano-banana-xxx.png")',
     ),
   error: z
     .string()

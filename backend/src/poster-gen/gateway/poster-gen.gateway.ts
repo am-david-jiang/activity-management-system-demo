@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { PosterGenService } from '../service/poster-gen.service';
 import { GeneratePosterDto } from '../dto/generate-poster.dto';
-import { WsMessage, ImageBinaryMessage } from '../dto/ws-message.dto';
+import { WsMessage } from '../dto/ws-message.dto';
 
 @WebSocketGateway({
   namespace: '/poster-gen',
@@ -68,9 +68,18 @@ export class PosterGenGateway
       for await (const message of this.posterGenService.generatePoster(
         dto,
         client.id,
-        this,
       )) {
-        client.emit(message.type, message);
+        if (
+          message.type === 'success' &&
+          'buffer' in message &&
+          message.buffer
+        ) {
+          const { buffer, ...metadata } = message;
+          client.emit('success', metadata);
+          client.emit('success_buffer', buffer);
+        } else {
+          client.emit(message.type, message);
+        }
       }
     } catch (err) {
       const errorMessage =
@@ -80,24 +89,5 @@ export class PosterGenGateway
         message: errorMessage,
       } as WsMessage);
     }
-  }
-
-  emitImageBinary(
-    clientId: string,
-    buffer: Buffer,
-    filename: string,
-    mimeType: string,
-  ): void {
-    const arrayBuffer = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    ) as ArrayBuffer;
-    const message: ImageBinaryMessage = {
-      type: 'image_binary',
-      buffer: arrayBuffer,
-      filename,
-      mimeType,
-    };
-    this.server.to(clientId).emit('image_binary', message);
   }
 }

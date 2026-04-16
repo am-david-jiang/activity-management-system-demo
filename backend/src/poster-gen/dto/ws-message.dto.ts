@@ -1,9 +1,4 @@
-export type WsMessageType =
-  | 'thinking'
-  | 'generating'
-  | 'success'
-  | 'error'
-  | 'image_binary';
+export type WsMessageType = 'thinking' | 'generating' | 'success' | 'error';
 
 export interface ThinkingMessage {
   type: 'thinking';
@@ -17,8 +12,10 @@ export interface GeneratingMessage {
 
 export interface SuccessMessage {
   type: 'success';
-  imageUrl: string;
+  filename: string;
+  mimeType: string;
   message: string;
+  buffer?: ArrayBuffer;
 }
 
 export interface ErrorMessage {
@@ -26,16 +23,8 @@ export interface ErrorMessage {
   message: string;
 }
 
-export interface ImageBinaryMessage {
-  type: 'image_binary';
-  buffer: ArrayBuffer;
-  filename: string;
-  mimeType: string;
-}
-
 export type WsMessage =
   | ThinkingMessage
   | GeneratingMessage
   | SuccessMessage
-  | ErrorMessage
-  | ImageBinaryMessage;
+  | ErrorMessage;
