@@ -16,9 +16,11 @@ export interface GeneratingMessage {
 
 export interface SuccessMessage {
   type: "success";
-  imageUrl: string;
-  prompt: string;
+  filename: string;
+  mimeType: string;
   message: string;
+  buffer?: ArrayBuffer;
+  blobUrl?: string;
 }
 
 export interface ErrorMessage {
@@ -95,6 +97,8 @@ export class PosterGenWebSocket {
   private reconnectDelay = 1000;
   private listeners: Set<(message: WsMessage) => void> = new Set();
   private connectionListeners: Set<(connected: boolean) => void> = new Set();
+  private pendingSuccessBlobUrl: string | null = null;
+  private pendingSuccessMetadata: Omit<SuccessMessage, 'buffer' | 'blobUrl'> | null = null;
 
   connect(token?: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -137,9 +141,40 @@ export class PosterGenWebSocket {
       messageTypes.forEach((type) => {
         this.socket?.on(type, (data: WsMessage) => {
           if (data.type === type) {
-            this.notifyListeners(data);
+            if (type === "success") {
+              const message = data as SuccessMessage;
+              if (message.blobUrl) {
+                this.pendingSuccessMetadata = null;
+                this.pendingSuccessBlobUrl = null;
+                this.notifyListeners(message);
+              } else if (this.pendingSuccessBlobUrl) {
+                message.blobUrl = this.pendingSuccessBlobUrl;
+                this.pendingSuccessBlobUrl = null;
+                this.pendingSuccessMetadata = null;
+                this.notifyListeners(message);
+              } else {
+                this.pendingSuccessMetadata = message;
+              }
+            } else {
+              this.notifyListeners(data);
+            }
           }
         });
+      });
+
+      this.socket.on("success_buffer", (buffer: ArrayBuffer) => {
+        const blob = new Blob([buffer], { type: "image/png" });
+        const blobUrl = URL.createObjectURL(blob);
+        this.pendingSuccessBlobUrl = blobUrl;
+        if (this.pendingSuccessMetadata) {
+          const message: SuccessMessage = {
+            ...this.pendingSuccessMetadata,
+            blobUrl,
+          };
+          this.pendingSuccessMetadata = null;
+          this.pendingSuccessBlobUrl = null;
+          this.notifyListeners(message);
+        }
       });
     });
   }
