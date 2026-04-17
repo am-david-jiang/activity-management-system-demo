@@ -75,3 +75,16 @@ export async function logout(accessToken: string): Promise<void> {
     throw new Error(`HTTP ${res.status}`);
   }
 }
+
+export interface RefreshTokenDto {
+  refreshToken: string;
+}
+
+export async function refreshToken(data: RefreshTokenDto): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return (await handleResponse<AuthResponse>(res)) as AuthResponse;
+}

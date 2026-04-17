@@ -9,6 +9,9 @@ import {
   SettingsIcon,
   UsersIcon,
 } from "lucide-react";
+import { useAuth } from "@/lib/context/auth-context";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Header } from "@/components/ui/header";
@@ -130,6 +133,27 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { isLoading, isAuthenticated } = useAuth();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  }, [isLoading, isAuthenticated, pathname]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>

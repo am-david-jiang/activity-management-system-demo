@@ -1,12 +1,61 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
-import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "@/lib/api/auth-api";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+} from "react";
+import { useRouter } from "next/navigation";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  refreshToken,
+  register as apiRegister,
+  type AuthUser,
+} from "@/lib/api/auth-api";
+
+interface AuthState {
+  user: AuthUser | null;
+  accessToken: string | null;
+  isLoading: boolean;
+}
+
+type AuthAction =
+  | { type: "INIT_SUCCESS"; user: AuthUser; accessToken: string }
+  | { type: "INIT_FAILURE" }
+  | { type: "LOGIN_SUCCESS"; user: AuthUser; accessToken: string; refreshToken: string }
+  | { type: "LOGOUT" };
+
+function authReducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case "INIT_SUCCESS":
+    case "LOGIN_SUCCESS":
+      return {
+        ...state,
+        user: action.user,
+        accessToken: action.accessToken,
+        isLoading: false,
+      };
+    case "INIT_FAILURE":
+    case "LOGOUT":
+      return {
+        user: null,
+        accessToken: null,
+        isLoading: false,
+      };
+    default:
+      return state;
+  }
+}
 
 interface AuthContextType {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -14,72 +63,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const AUTH_STORAGE_KEY = "auth_tokens";
+const REFRESH_TOKEN_KEY = "auth_refresh_token";
 
-interface StoredAuth {
-  accessToken: string;
-  refreshToken: string;
-  user: AuthUser;
-}
-
-function getStoredAuth(): StoredAuth | null {
+function getStoredRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!stored) return null;
-    return JSON.parse(stored) as StoredAuth;
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
-function setStoredAuth(auth: StoredAuth): void {
+function setStoredRefreshToken(token: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
 }
 
-function clearStoredAuth(): void {
+function clearStoredRefreshToken(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
+
+const initialState: AuthState = {
+  user: null,
+  accessToken: null,
+  isLoading: true,
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = getStoredAuth();
-    return stored?.user ?? null;
-  });
-  const [accessToken, setAccessToken] = useState<string | null>(() => {
-    const stored = getStoredAuth();
-    return stored?.accessToken ?? null;
-  });
-
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await apiLogin({ email, password });
-    setStoredAuth({
-      accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
-      user: response.user,
-    });
-    setUser(response.user);
-    setAccessToken(response.accessToken);
-  }, []);
-
-  const register = useCallback(async (email: string, name: string, password: string) => {
-    const response = await apiRegister({ email, name, password });
-    setStoredAuth({
-      accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
-      user: response.user,
-    });
-    setUser(response.user);
-    setAccessToken(response.accessToken);
-  }, []);
+  const router = useRouter();
+  const [state, dispatch] = useReducer(authReducer, initialState);
+  const initRef = useRef(false);
 
   const logout = useCallback(async () => {
-    const token = accessToken;
-    clearStoredAuth();
-    setUser(null);
-    setAccessToken(null);
+    const token = state.accessToken;
+    clearStoredRefreshToken();
+    dispatch({ type: "LOGOUT" });
     if (token) {
       try {
         await apiLogout(token);
@@ -87,10 +106,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Ignore logout API errors
       }
     }
-  }, [accessToken]);
+    router.push("/login");
+  }, [state.accessToken, router]);
+
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const storedRefreshToken = getStoredRefreshToken();
+    if (!storedRefreshToken) {
+      dispatch({ type: "INIT_FAILURE" });
+      return;
+    }
+
+    refreshToken({ refreshToken: storedRefreshToken })
+      .then((response) => {
+        setStoredRefreshToken(response.refreshToken);
+        dispatch({
+          type: "INIT_SUCCESS",
+          user: response.user,
+          accessToken: response.accessToken,
+        });
+      })
+      .catch(() => {
+        clearStoredRefreshToken();
+        dispatch({ type: "INIT_FAILURE" });
+        router.push("/login");
+      });
+  }, [router]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const response = await apiLogin({ email, password });
+    setStoredRefreshToken(response.refreshToken);
+    dispatch({
+      type: "LOGIN_SUCCESS",
+      user: response.user,
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+    });
+  }, []);
+
+  const register = useCallback(async (email: string, name: string, password: string) => {
+    const response = await apiRegister({ email, name, password });
+    setStoredRefreshToken(response.refreshToken);
+    dispatch({
+      type: "LOGIN_SUCCESS",
+      user: response.user,
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+    });
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading: false, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user: state.user,
+        accessToken: state.accessToken,
+        isLoading: state.isLoading,
+        isAuthenticated: !!state.accessToken && !!state.user,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
