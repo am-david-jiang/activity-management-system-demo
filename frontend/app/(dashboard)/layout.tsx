@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Header } from "@/components/ui/header";
 import { Toaster } from "@/components/ui/sonner";
 import {
   Sidebar,
@@ -143,6 +144,7 @@ export default function DashboardLayout({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
+        <Header />
         <div className="flex flex-1 flex-col">{children}</div>
       </SidebarInset>
       <Toaster position="top-center" />
