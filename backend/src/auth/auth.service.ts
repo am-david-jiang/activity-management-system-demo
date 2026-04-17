@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +26,7 @@ export class AuthService {
     private readonly credentialRepository: Repository<Credential>,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    private readonly userService: UserService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -51,7 +54,7 @@ export class AuthService {
 
     const credential = this.credentialRepository.create({
       password: hashedPassword,
-      userId: savedUser.id,
+      user: savedUser,
     });
     await this.credentialRepository.save(credential);
 
@@ -59,19 +62,21 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-      relations: ['roles'],
-    });
+    const user = await this.userService.findByEmail(loginDto.email);
+
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('User is not exist');
     }
 
     const credential = await this.credentialRepository.findOne({
-      where: { userId: user.id },
+      where: { user: { id: user.id } },
+      relations: {
+        user: true,
+      },
     });
+
     if (!credential) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Unable to find related credential');
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -79,31 +84,53 @@ export class AuthService {
       credential.password,
     );
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Wrong password');
     }
 
     return this.generateAuthResponse(user);
   }
 
   async logout(userId: string): Promise<void> {
-    await this.credentialRepository.update({ userId }, { refreshToken: null });
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new BadRequestException('User is not exist');
+    }
+    await this.credentialRepository.update({ user }, { refreshToken: null });
   }
 
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
   ): Promise<AuthResponseDto> {
+    interface RefreshTokenPayload {
+      sub: string;
+      iat?: number;
+      exp?: number;
+    }
+
+    const decoded = this.jwtService.verify<RefreshTokenPayload>(
+      refreshTokenDto.refreshToken,
+      { secret: process.env.JWT_REFRESH_SECRET },
+    );
+
+    const userId = decoded.sub;
+    const user = await this.userService.findById(userId);
+
+    if (!user) {
+      throw new BadRequestException('User is not exist');
+    }
+
     const credential = await this.credentialRepository.findOne({
-      where: { refreshToken: refreshTokenDto.refreshToken },
-      relations: ['user', 'user.roles'],
+      where: { user: { id: user.id } },
+      relations: { user: true },
     });
 
-    if (!credential) {
+    if (!credential?.user || !credential.refreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
     const isTokenValid = await bcrypt.compare(
       refreshTokenDto.refreshToken,
-      credential.refreshToken!,
+      credential.refreshToken,
     );
     if (!isTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -113,16 +140,15 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.userRepository.findOne({
-      where: { email },
-      relations: ['roles'],
-    });
+    const user = await this.userService.findByEmail(email);
+
     if (!user) {
       return null;
     }
 
     const credential = await this.credentialRepository.findOne({
-      where: { userId: user.id },
+      where: { user: { id: user.id } },
+      relations: { user: true },
     });
     if (!credential) {
       return null;
@@ -158,7 +184,7 @@ export class AuthService {
 
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await this.credentialRepository.update(
-      { userId: user.id },
+      { user },
       { refreshToken: hashedRefreshToken },
     );
 

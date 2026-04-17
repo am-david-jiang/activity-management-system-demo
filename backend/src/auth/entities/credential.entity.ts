@@ -17,7 +17,12 @@ export class Credential {
   @Column()
   password: string;
 
-  @Column({ name: 'refresh_token', type: 'varchar', nullable: true })
+  @Column({
+    name: 'refresh_token',
+    type: 'varchar',
+    nullable: true,
+    unique: true,
+  })
   refreshToken: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -26,10 +31,7 @@ export class Credential {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @OneToOne(() => User, { onDelete: 'CASCADE' })
+  @OneToOne(() => User, (user) => user.id, { onDelete: 'CASCADE' })
   @JoinColumn()
   user: User;
-
-  @Column({ name: 'user_id' })
-  userId: string;
 }
