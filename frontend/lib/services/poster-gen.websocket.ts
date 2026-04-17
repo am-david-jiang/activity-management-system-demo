@@ -2,11 +2,17 @@
 
 import { io, Socket } from "socket.io-client";
 
-export type WsMessageType = "thinking" | "generating" | "success" | "error";
+export type WsMessageType = "thinking" | "tool_call" | "generating" | "success" | "error";
 
 export interface ThinkingMessage {
   type: "thinking";
   content: string;
+}
+
+export interface ToolCallMessage {
+  type: "tool_call";
+  toolName: string;
+  input?: Record<string, unknown>;
 }
 
 export interface GeneratingMessage {
@@ -30,6 +36,7 @@ export interface ErrorMessage {
 
 export type WsMessage =
   | ThinkingMessage
+  | ToolCallMessage
   | GeneratingMessage
   | SuccessMessage
   | ErrorMessage;
@@ -83,6 +90,7 @@ export class PosterGenWebSocket {
 
       const messageTypes: WsMessageType[] = [
         "thinking",
+        "tool_call",
         "generating",
         "success",
         "error",

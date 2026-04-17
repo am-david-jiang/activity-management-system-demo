@@ -5,7 +5,7 @@ import type {
     WsMessage,
     SuccessMessage,
 } from "@/lib/services/poster-gen.websocket";
-import { Loader2, ImageIcon, AlertCircle, CheckCircle2, Download } from "lucide-react";
+import { Loader2, ImageIcon, AlertCircle, CheckCircle2, Download, Wrench } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatDisplayProps {
@@ -57,6 +57,19 @@ function MessageBubble({ message }: { message: WsMessage }) {
                         <p className="font-medium text-sm">AI 思考中</p>
                         <p className="text-muted-foreground text-sm mt-1">
                             {message.content}
+                        </p>
+                    </div>
+                </div>
+            );
+
+        case "tool_call":
+            return (
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                    <Wrench className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div>
+                        <p className="font-medium text-sm text-blue-800 dark:text-blue-200">调用工具</p>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            {message.toolName}
                         </p>
                     </div>
                 </div>
