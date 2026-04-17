@@ -1,13 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
-import { login as apiLogin, logout as apiLogout, type AuthUser } from "@/lib/api/auth-api";
+import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "@/lib/api/auth-api";
 
 interface AuthContextType {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, name: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -63,6 +64,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(response.accessToken);
   }, []);
 
+  const register = useCallback(async (email: string, name: string, password: string) => {
+    const response = await apiRegister({ email, name, password });
+    setStoredAuth({
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+      user: response.user,
+    });
+    setUser(response.user);
+    setAccessToken(response.accessToken);
+  }, []);
+
   const logout = useCallback(async () => {
     const token = accessToken;
     clearStoredAuth();
@@ -78,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading: false, login, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading: false, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

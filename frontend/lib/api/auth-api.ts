@@ -19,6 +19,12 @@ export interface LoginDto {
   password: string;
 }
 
+export interface RegisterDto {
+  email: string;
+  name: string;
+  password: string;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -42,6 +48,15 @@ async function handleResponse<T>(res: globalThis.Response): Promise<T | null> {
 
 export async function login(data: LoginDto): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return (await handleResponse<AuthResponse>(res)) as AuthResponse;
+}
+
+export async function register(data: RegisterDto): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
