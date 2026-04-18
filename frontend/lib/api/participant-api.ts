@@ -1,13 +1,6 @@
+import { authClient } from "./client";
+import { handleResponseWithAuth } from "./response";
 import type { Activity } from "./activity-api";
-
-const API_BASE = "http://localhost:8000/api";
-
-interface ApiResponse<T> {
-  code: number;
-  success: boolean;
-  data: T | null;
-  message: string;
-}
 
 export interface Participant {
   userId: string;
@@ -29,7 +22,7 @@ export interface CreateParticipantDto {
   qqAccount?: string;
 }
 
-export interface UpdateParticipantDto extends Partial<CreateParticipantDto> {}
+export type UpdateParticipantDto = Partial<CreateParticipantDto>;
 
 export interface SearchParticipantDto {
   keyword?: string;
@@ -46,27 +39,6 @@ export interface PaginatedParticipants {
   size: number;
 }
 
-async function handleResponse<T>(
-  res: globalThis.Response,
-  method?: string,
-): Promise<T | null> {
-  const contentType = res.headers.get("content-type") ?? "";
-  const isJson = contentType.includes("application/json");
-
-  if (method === "DELETE" && res.ok) {
-    return null;
-  }
-
-  if (!isJson) {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return null;
-  }
-
-  const json: ApiResponse<T> = await res.json();
-  if (!res.ok || !json.success) throw new Error(json.message);
-  return json.data;
-}
-
 export async function searchParticipants(
   params: SearchParticipantDto,
 ): Promise<PaginatedParticipants> {
@@ -77,9 +49,9 @@ export async function searchParticipants(
   searchParams.set("page", String(params.page ?? 1));
   searchParams.set("size", String(params.size ?? 10));
 
-  const res = await fetch(`${API_BASE}/participants/search?${searchParams}`);
+  const res = await authClient.get(`participants/search?${searchParams}`);
   return (
-    (await handleResponse<PaginatedParticipants>(res)) ?? {
+    (await handleResponseWithAuth<PaginatedParticipants>(res)) ?? {
       data: [],
       total: 0,
       page: 1,
@@ -89,19 +61,15 @@ export async function searchParticipants(
 }
 
 export async function getParticipant(userId: string): Promise<Participant> {
-  const res = await fetch(`${API_BASE}/participants/${userId}`);
-  return (await handleResponse<Participant>(res)) as Participant;
+  const res = await authClient.get(`participants/${userId}`);
+  return (await handleResponseWithAuth<Participant>(res)) as Participant;
 }
 
 export async function createParticipant(
   data: CreateParticipantDto,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/participants`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  await handleResponse<Participant>(res);
+  const res = await authClient.post("participants", { json: data });
+  await handleResponseWithAuth<Participant>(res);
 }
 
 export async function updateParticipant(
@@ -112,22 +80,16 @@ export async function updateParticipant(
   for (const [key, value] of Object.entries(data)) {
     processedData[key] = value || null;
   }
-  const res = await fetch(`${API_BASE}/participants/${userId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(processedData),
-  });
-  await handleResponse<Participant>(res);
+  const res = await authClient.patch(`participants/${userId}`, { json: processedData });
+  await handleResponseWithAuth<Participant>(res);
 }
 
 export async function deleteParticipant(userId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/participants/${userId}`, {
-    method: "DELETE",
-  });
-  await handleResponse<void>(res, "DELETE");
+  const res = await authClient.delete(`participants/${userId}`);
+  await handleResponseWithAuth<void>(res);
 }
 
 export async function getParticipants(): Promise<Participant[]> {
-  const res = await fetch(`${API_BASE}/participants`);
-  return (await handleResponse<Participant[]>(res)) ?? [];
+  const res = await authClient.get("participants");
+  return (await handleResponseWithAuth<Participant[]>(res)) ?? [];
 }

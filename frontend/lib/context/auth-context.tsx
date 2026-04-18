@@ -26,7 +26,12 @@ interface AuthState {
 type AuthAction =
   | { type: "INIT_SUCCESS"; user: AuthUser; accessToken: string }
   | { type: "INIT_FAILURE" }
-  | { type: "LOGIN_SUCCESS"; user: AuthUser; accessToken: string; refreshToken: string }
+  | {
+      type: "LOGIN_SUCCESS";
+      user: AuthUser;
+      accessToken: string;
+      refreshToken: string;
+    }
   | { type: "LOGOUT" };
 
 function authReducer(state: AuthState, action: AuthAction): AuthState {
@@ -64,6 +69,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const REFRESH_TOKEN_KEY = "auth_refresh_token";
+const ACCESS_TOKEN_KEY = "auth_access_token";
 
 function getStoredRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -84,6 +90,16 @@ function clearStoredRefreshToken(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
+function setStoredAccessToken(token: string): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+function clearStoredAccessToken(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
 const initialState: AuthState = {
   user: null,
   accessToken: null,
@@ -96,18 +112,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initRef = useRef(false);
 
   const logout = useCallback(async () => {
-    const token = state.accessToken;
-    clearStoredRefreshToken();
-    dispatch({ type: "LOGOUT" });
-    if (token) {
-      try {
-        await apiLogout(token);
-      } catch {
-        // Ignore logout API errors
-      }
+    try {
+      await apiLogout();
+    } catch {
+      // Ignore logout API errors
+    } finally {
+      clearStoredRefreshToken();
+      clearStoredAccessToken();
+      dispatch({ type: "LOGOUT" });
+      router.push("/login");
     }
-    router.push("/login");
-  }, [state.accessToken, router]);
+  }, [router]);
 
   useEffect(() => {
     if (initRef.current) return;
@@ -122,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshToken({ refreshToken: storedRefreshToken })
       .then((response) => {
         setStoredRefreshToken(response.refreshToken);
+        setStoredAccessToken(response.accessToken);
         dispatch({
           type: "INIT_SUCCESS",
           user: response.user,
@@ -136,8 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const login = useCallback(async (email: string, password: string) => {
+    console.debug("[login callback]");
     const response = await apiLogin({ email, password });
     setStoredRefreshToken(response.refreshToken);
+    setStoredAccessToken(response.accessToken);
     dispatch({
       type: "LOGIN_SUCCESS",
       user: response.user,
@@ -146,16 +164,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const register = useCallback(async (email: string, name: string, password: string) => {
-    const response = await apiRegister({ email, name, password });
-    setStoredRefreshToken(response.refreshToken);
-    dispatch({
-      type: "LOGIN_SUCCESS",
-      user: response.user,
-      accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
-    });
-  }, []);
+  const register = useCallback(
+    async (email: string, name: string, password: string) => {
+      const response = await apiRegister({ email, name, password });
+      setStoredRefreshToken(response.refreshToken);
+      setStoredAccessToken(response.accessToken);
+      dispatch({
+        type: "LOGIN_SUCCESS",
+        user: response.user,
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+      });
+    },
+    [],
+  );
 
   return (
     <AuthContext.Provider

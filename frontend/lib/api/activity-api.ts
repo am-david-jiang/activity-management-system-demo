@@ -1,11 +1,5 @@
-const API_BASE = "http://localhost:8000/api";
-
-interface ApiResponse<T> {
-  code: number;
-  success: boolean;
-  data: T | null;
-  message: string;
-}
+import { authClient } from "./client";
+import { handleResponseWithAuth } from "./response";
 
 export interface Activity {
   id: number;
@@ -29,86 +23,50 @@ export interface CreateActivityDto {
 
 export type UpdateActivityDto = Partial<CreateActivityDto>;
 
-async function handleResponse<T>(
-  res: globalThis.Response,
-  method?: string,
-): Promise<T | null> {
-  const contentType = res.headers.get("content-type") ?? "";
-  const isJson = contentType.includes("application/json");
-
-  if (method === "DELETE" && res.ok) {
-    return null;
-  }
-
-  if (!isJson) {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return null;
-  }
-
-  const json: ApiResponse<T> = await res.json();
-  if (!res.ok || !json.success) throw new Error(json.message);
-  return json.data;
-}
-
 export async function getActivities(): Promise<Activity[]> {
-  const res = await fetch(`${API_BASE}/activities`);
-  const activities = (await handleResponse<Activity[]>(res)) ?? [];
-  return activities;
+  const res = await authClient.get("activities");
+  return (await handleResponseWithAuth<Activity[]>(res)) ?? [];
 }
 
 export async function createActivity(data: CreateActivityDto): Promise<void> {
-  const res = await fetch(`${API_BASE}/activities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  await handleResponse<Activity>(res);
+  const res = await authClient.post("activities", { json: data });
+  await handleResponseWithAuth<Activity>(res);
 }
 
 export async function updateActivity(
   id: number,
   data: UpdateActivityDto,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/activities/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  await handleResponse<Activity>(res);
+  const res = await authClient.patch(`activities/${id}`, { json: data });
+  await handleResponseWithAuth<Activity>(res);
 }
 
 export async function deleteActivity(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/activities/${id}`, {
-    method: "DELETE",
-  });
-  await handleResponse<void>(res, "DELETE");
+  const res = await authClient.delete(`activities/${id}`);
+  await handleResponseWithAuth<void>(res);
 }
 
 export async function finishActivity(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/activities/${id}/finish`, {
-    method: "POST",
-  });
-  await handleResponse<Activity>(res);
+  const res = await authClient.post(`activities/${id}/finish`);
+  await handleResponseWithAuth<Activity>(res);
 }
 
 export async function getActiveActivities(): Promise<Activity[]> {
-  const res = await fetch(`${API_BASE}/activities/active`);
-  return (await handleResponse<Activity[]>(res)) ?? [];
+  const res = await authClient.get("activities/active");
+  return (await handleResponseWithAuth<Activity[]>(res)) ?? [];
 }
 
 export async function getActivityParticipants(
   activityId: number,
 ): Promise<import("./participant-api").Participant[]> {
-  const res = await fetch(`${API_BASE}/activities/${activityId}/participants`);
-  return (await handleResponse<import("./participant-api").Participant[]>(res)) ?? [];
+  const res = await authClient.get(`activities/${activityId}/participants`);
+  return (await handleResponseWithAuth<import("./participant-api").Participant[]>(res)) ?? [];
 }
 
 export async function addParticipantToActivity(
   activityId: number,
   userId: string,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/activities/${activityId}/participants/${userId}`, {
-    method: "POST",
-  });
-  await handleResponse<void>(res);
+  const res = await authClient.post(`activities/${activityId}/participants/${userId}`);
+  await handleResponseWithAuth<void>(res);
 }
