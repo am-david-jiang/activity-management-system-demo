@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Resume Builder",
-  description: "Build and manage your professional resumes",
+  title: "活动管理系统",
+  description: "高效管理活动全流程，轻松组织、参与和追踪各类活动。简化报名流程，实时管理参与者，提升活动组织效率。",
 };
 
 export default function RootLayout({
