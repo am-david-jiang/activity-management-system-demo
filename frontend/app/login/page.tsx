@@ -135,7 +135,7 @@ export default function LoginPage() {
             </form>
             <div className="relative hidden bg-muted md:block">
               <Image
-                src="/login.jpg"
+                src="/login-bg.jpg"
                 width={450}
                 height={450}
                 alt="Image"
