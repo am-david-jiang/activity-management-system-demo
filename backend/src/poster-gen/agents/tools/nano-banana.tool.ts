@@ -5,7 +5,7 @@ import { Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 
 const logger = new Logger('NanoBananaTool');
 
@@ -110,7 +110,7 @@ export function createNanoBananaTool() {
         }
 
         const ext = mimeType === 'image/png' ? 'png' : 'jpg';
-        const filename = `nano-banana-${uuidv4()}.${ext}`;
+        const filename = `nano-banana-${randomUUID()}.${ext}`;
         const filepath = path.join(tempDir, filename);
         fs.writeFileSync(filepath, imageBuffer);
 

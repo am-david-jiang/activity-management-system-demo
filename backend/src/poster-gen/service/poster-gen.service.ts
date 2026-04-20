@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { ActivityService } from '../../activity/activity.service';
 import { PosterGenerationLog } from '../entities/poster-generation-log.entity';
 import { GeneratePosterDto } from '../dto/generate-poster.dto';
@@ -46,7 +46,7 @@ export class PosterGenService {
     clientId: string,
     sessionId?: string,
   ): AsyncGenerator<WsMessage, void, unknown> {
-    const sid = sessionId ?? uuidv4();
+    const sid = sessionId ?? randomUUID();
     let state = this.sessions.get(sid);
 
     if (!state) {

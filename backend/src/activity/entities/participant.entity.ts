@@ -6,7 +6,7 @@ import {
   JoinTable,
   BeforeInsert,
 } from 'typeorm';
-import { v7 as uuidv7 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { Activity } from './activity.entity';
 
 @Entity('participants')
@@ -43,7 +43,7 @@ export class Participant {
   @BeforeInsert()
   generateUserId() {
     if (!this.userId) {
-      this.userId = uuidv7();
+      this.userId = randomUUID();
     }
   }
 }
