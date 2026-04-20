@@ -21,7 +21,7 @@ import {
 import { DatePickerField } from "@/components/form/date-picker-field";
 import { TextInputField } from "@/components/form/text-input-field";
 import { NumberInputField } from "@/components/form/number-input-field";
-import { Activity, CreateActivityDto, UpdateActivityDto } from "@/lib/api";
+import { Activity, CreateActivityDto } from "@/lib/api";
 
 const activitySchema = z
   .object({
@@ -62,20 +62,10 @@ function toCreateActivityDto(values: ActivityFormValues): CreateActivityDto {
   };
 }
 
-function toUpdateActivityDto(
-  values: ActivityFormValues,
-  id: number,
-): UpdateActivityDto {
-  return {
-    ...toCreateActivityDto(values),
-    id,
-  };
-}
-
 interface ActivityFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateActivityDto | UpdateActivityDto) => void;
+  onSubmit: (data: CreateActivityDto) => void;
   initialData?: Activity;
   mode: "create" | "edit";
 }
@@ -99,10 +89,12 @@ export function ActivityForm({
       onSubmit: activitySchema,
     },
     onSubmit: ({ value }) => {
+      const parsedValue = activitySchema.parse(value);
+
       if (mode === "edit" && initialData) {
-        onSubmit(toUpdateActivityDto(value, initialData.id));
+        onSubmit(toCreateActivityDto(parsedValue));
       } else {
-        onSubmit(toCreateActivityDto(value));
+        onSubmit(toCreateActivityDto(parsedValue));
       }
     },
   });

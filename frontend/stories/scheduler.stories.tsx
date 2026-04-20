@@ -70,7 +70,7 @@ export const DailyView: Story = {
     defaultVisibleDate: new Date("2026-04-12"),
   },
   render: function Renderer(args) {
-    const [{ events }, updateArgs] = useArgs();
+    const [{ events }, updateArgs] = useArgs<{ events: Event[] }>();
 
     function onAddEvent(event: Event) {
       const newEvents = [...events, event];
