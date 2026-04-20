@@ -41,6 +41,6 @@ export class PosterGenerationLog {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'datetime', nullable: true, name: 'completed_at' })
+  @Column({ type: 'timestamp', nullable: true, name: 'completed_at' })
   completedAt?: Date;
 }
