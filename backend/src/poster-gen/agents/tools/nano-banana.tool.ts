@@ -6,6 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { randomUUID } from 'node:crypto';
+import { Command } from '@langchain/langgraph';
+import { ToolMessage, type ToolRuntime } from 'langchain';
 
 const logger = new Logger('NanoBananaTool');
 
@@ -33,18 +35,52 @@ const NanoBananaSchema = z.object({
 
 type NanoBananaInput = z.infer<typeof NanoBananaSchema>;
 
+type ImageStepState = {
+  imagePrompt?: string;
+  requirementsResult?: {
+    poster?: {
+      size?: string;
+    };
+  };
+};
+
+export function inferAspectRatio(size?: string): string {
+  if (!size) {
+    return '16:9';
+  }
+
+  const match = size.match(/\b(\d{1,2}:\d{1,2})\b/);
+  if (!match) {
+    return '16:9';
+  }
+
+  return SUPPORTED_ASPECT_RATIOS.includes(match[1]) ? match[1] : '16:9';
+}
+
 export function createNanoBananaTool() {
   return tool(
-    async ({ prompt, aspectRatio }: NanoBananaInput): Promise<string> => {
+    async (
+      { prompt, aspectRatio }: NanoBananaInput,
+      runtime: ToolRuntime<ImageStepState>,
+    ): Promise<Command> => {
       try {
+        const resolvedPrompt = prompt ?? runtime.state.imagePrompt;
+        const resolvedAspectRatio =
+          aspectRatio ??
+          inferAspectRatio(runtime.state.requirementsResult?.poster?.size);
+
         logger.log(
-          `Invoking generate_image_nano_banana tool with prompt: ${prompt}, aspectRatio: ${aspectRatio}`,
+          `Invoking generate_image_nano_banana tool with aspectRatio: ${resolvedAspectRatio}`,
         );
 
-        const normalizedAspectRatio = aspectRatio.toLowerCase();
+        if (!resolvedPrompt) {
+          throw new Error('Missing image prompt in tool input or agent state');
+        }
+
+        const normalizedAspectRatio = resolvedAspectRatio.toLowerCase();
         if (!SUPPORTED_ASPECT_RATIOS.includes(normalizedAspectRatio)) {
           throw new Error(
-            `Unsupported aspect ratio: ${aspectRatio}. Supported: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,
+            `Unsupported aspect ratio: ${resolvedAspectRatio}. Supported: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,
           );
         }
 
@@ -62,7 +98,7 @@ export function createNanoBananaTool() {
           responseModalities: ['IMAGE', 'TEXT'],
         });
 
-        const response = await model.invoke(prompt);
+        const response = await model.invoke(resolvedPrompt);
 
         if (!response.contentBlocks) {
           throw new Error(
@@ -117,22 +153,46 @@ export function createNanoBananaTool() {
         logger.log(
           `generate_image_nano_banana tool successfully generated image: ${filepath}`,
         );
-        return JSON.stringify({ imageUrl: filepath, mimeType, filename });
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: '海报图片生成完成，已进入最终响应阶段',
+                tool_call_id: runtime.toolCallId,
+                name: 'generate_image_nano_banana',
+              }),
+            ],
+            finalImage: { imageUrl: filepath, mimeType, filename },
+            currentStep: 'completed',
+          },
+        });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         logger.error(
-          `generate_image_nano_banana tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          `generate_image_nano_banana tool failed: ${message}`,
           error instanceof Error ? error.stack : undefined,
         );
-        return JSON.stringify({
-          error: `generate_image_nano_banana failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: `海报图片生成失败：${message}`,
+                tool_call_id: runtime.toolCallId,
+                name: 'generate_image_nano_banana',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError: `generate_image_nano_banana failed: ${message}`,
+          },
         });
       }
     },
     {
       name: 'generate_image_nano_banana',
       description:
-        'Generates a poster image using Google Gemini (nano-banana) text-to-image API. ' +
-        'Input should be a JSON object with prompt (English text describing the poster) and aspectRatio (e.g., "16:9", "1:1", "9:16").',
+        'Generate a poster image using Google Gemini (nano-banana) and hand off to the completed step. ' +
+        'Uses imagePrompt and poster size from the current agent state unless overrides are provided.',
       schema: NanoBananaSchema,
     },
   );

@@ -18,13 +18,14 @@ import {
   OrchestratorResponse,
   type OrchestratorState,
 } from '../agents/orchestrator.agent';
-import { AIMessage, ToolMessage, type ReactAgent } from 'langchain';
+import { AIMessage, ToolMessage } from 'langchain';
 
 @Injectable()
 export class PosterGenService {
   private readonly logger = new Logger(PosterGenService.name);
 
-  private orchestrator: { agent: ReactAgent } | null = null;
+  private orchestrator: ReturnType<typeof createOrchestratorAgent> | null =
+    null;
 
   private sessions = new Map<string, OrchestratorState>();
 
@@ -43,7 +44,7 @@ export class PosterGenService {
 
   async *generatePoster(
     dto: GeneratePosterDto,
-    clientId: string,
+    _clientId: string,
     sessionId?: string,
   ): AsyncGenerator<WsMessage, void, unknown> {
     const sid = sessionId ?? randomUUID();
@@ -54,7 +55,7 @@ export class PosterGenService {
         sessionId: sid,
         activityId: dto.activityId,
         userRequirements: dto.requirements,
-        currentPhase: 'requirements',
+        currentStep: 'requirements',
       };
       this.sessions.set(sid, state);
     }
@@ -68,6 +69,9 @@ export class PosterGenService {
 
       const stream = await agent.stream(
         {
+          activityId: state.activityId,
+          userRequirements: state.userRequirements,
+          currentStep: state.currentStep,
           messages: [
             {
               role: 'user',
@@ -82,12 +86,16 @@ export class PosterGenService {
 
       for await (const chunk of stream) {
         const entries = Object.entries(chunk);
-        const [, content] = entries[0];
+        const [, rawContent] = entries[0];
+        const content = rawContent as {
+          messages?: unknown[];
+          structuredResponse?: OrchestratorResponse;
+        };
 
         const messages = content.messages ?? [];
         for (const msg of messages) {
           if (content.structuredResponse) {
-            finalResponse = content.structuredResponse as OrchestratorResponse;
+            finalResponse = content.structuredResponse;
             continue;
           }
 
@@ -120,7 +128,14 @@ export class PosterGenService {
       }
 
       if (finalResponse.success) {
-        state.currentPhase = 'confirmed';
+        state.currentStep = 'completed';
+        state.finalImage = {
+          imageUrl: finalResponse.imageUrl ?? '',
+          mimeType: finalResponse.mimeType ?? 'image/png',
+          filename:
+            finalResponse.filename ??
+            path.basename(finalResponse.imageUrl ?? 'poster.png'),
+        };
 
         const filename =
           finalResponse.filename ??
@@ -132,7 +147,10 @@ export class PosterGenService {
         let buffer: ArrayBuffer | undefined;
         if (finalResponse.imageUrl && fs.existsSync(finalResponse.imageUrl)) {
           const imageBuffer = fs.readFileSync(finalResponse.imageUrl);
-          buffer = imageBuffer.buffer;
+          buffer = imageBuffer.buffer.slice(
+            imageBuffer.byteOffset,
+            imageBuffer.byteOffset + imageBuffer.byteLength,
+          );
         }
 
         yield {
@@ -143,6 +161,8 @@ export class PosterGenService {
           buffer,
         } as SuccessMessage;
       } else {
+        state.currentStep = 'completed';
+        state.finalError = finalResponse.error ?? '生成失败';
         this.sessions.delete(sid);
         yield {
           type: 'error',

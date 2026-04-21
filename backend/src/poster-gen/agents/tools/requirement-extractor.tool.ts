@@ -1,63 +1,114 @@
-import { tool } from '@langchain/core/tools';
+import { tool, ToolMessage, type ToolRuntime } from 'langchain';
 import { z } from 'zod';
 import { Logger } from '@nestjs/common';
+import { Command } from '@langchain/langgraph';
 import type { ActivityService } from '../../../activity/activity.service';
 import {
   createRequirementExtractorAgent,
-  type RequirementExtractorOutput,
+  RequirementExtractorSchema,
 } from '../requirement-extractor';
 
 const logger = new Logger('RequirementExtractorTool');
 
+type RequirementStepState = {
+  activityId?: number;
+  userRequirements?: string;
+};
+
 /**
- * Tool wrapper for the requirement extractor sub-agent.
- * The supervisor agent uses this tool to extract poster requirements.
+ * State transition tool for the requirements handoff step.
  */
 export function createRequirementExtractorTool(
   activityService: ActivityService,
 ) {
   return tool(
-    async ({
-      activityId,
-      userRequirements,
-    }: {
-      activityId: number;
-      userRequirements: string;
-    }): Promise<string> => {
+    async (
+      {
+        activityId,
+        userRequirements,
+      }: {
+        activityId: number;
+        userRequirements: string;
+      },
+      runtime: ToolRuntime<RequirementStepState>,
+    ): Promise<Command> => {
+      const resolvedActivityId = activityId ?? runtime.state.activityId;
+      const resolvedUserRequirements =
+        userRequirements ?? runtime.state.userRequirements;
+
+      if (resolvedActivityId == null || !resolvedUserRequirements) {
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content:
+                  '需求提取失败：缺少 activityId 或 userRequirements 状态',
+                tool_call_id: runtime.toolCallId,
+                name: 'requirement_extractor',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError:
+              'requirement_extractor failed: missing activityId or userRequirements',
+          },
+        });
+      }
+
       try {
         logger.log(
-          `Invoking requirement_extractor tool with activityId: ${activityId}, userRequirements: ${userRequirements}`,
+          `Invoking requirement_extractor handoff with activityId: ${resolvedActivityId}`,
         );
         const agent = createRequirementExtractorAgent(activityService);
-
-        const input = `活动ID: ${activityId}\n用户需求描述: ${userRequirements}`;
+        const input = `活动ID: ${resolvedActivityId}\n用户需求描述: ${resolvedUserRequirements}`;
 
         const result = await agent.invoke({
           messages: [{ role: 'user', content: input }],
         });
 
-        logger.log(
-          `requirement_extractor tool returned: ${JSON.stringify(result.structuredResponse)}`,
+        const requirements = RequirementExtractorSchema.parse(
+          result.structuredResponse,
         );
-        return JSON.stringify(
-          result.structuredResponse as RequirementExtractorOutput,
-        );
+
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: '海报需求提取完成，已移交到创意策划阶段',
+                tool_call_id: runtime.toolCallId,
+                name: 'requirement_extractor',
+              }),
+            ],
+            requirementsResult: requirements,
+            currentStep: 'concept',
+          },
+        });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         logger.error(
-          `requirement_extractor tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          `requirement_extractor handoff failed: ${message}`,
           error instanceof Error ? error.stack : undefined,
         );
-        return JSON.stringify({
-          error: `requirement_extractor failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: `海报需求提取失败：${message}`,
+                tool_call_id: runtime.toolCallId,
+                name: 'requirement_extractor',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError: `requirement_extractor failed: ${message}`,
+          },
         });
       }
     },
     {
       name: 'requirement_extractor',
       description:
-        'Extract poster design requirements from activity info and user input. ' +
-        'Input: activityId (number), userRequirements (string). ' +
-        'Output: JSON with activity info and poster requirements (style, theme, language, color, size, visualConstraints).',
+        'Extract poster design requirements from activity info and user input, then hand off to the concept planning step.',
       schema: z.object({
         activityId: z.number().describe('Activity ID'),
         userRequirements: z

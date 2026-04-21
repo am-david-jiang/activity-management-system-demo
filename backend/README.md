@@ -31,6 +31,35 @@
 $ pnpm install
 ```
 
+## Database configuration
+
+This project supports both PostgreSQL and MySQL through TypeORM.
+
+PostgreSQL:
+```bash
+DB_TYPE=postgres
+DB_SSL=true
+DATABASE_URL=postgresql://user:password@host:5432/database
+```
+
+MySQL:
+```bash
+DB_TYPE=mysql
+DB_SSL=false
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=activity_management_system
+```
+
+You can also use a single MySQL connection string:
+
+```bash
+DB_TYPE=mysql
+MYSQL_URL=mysql://root:your_password@127.0.0.1:3306/activity_management_system
+```
+
 ## Compile and run the project
 
 ```bash

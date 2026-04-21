@@ -1,94 +1,115 @@
-import { tool } from '@langchain/core/tools';
+import { tool, ToolMessage, type ToolRuntime } from 'langchain';
 import { z } from 'zod';
 import { Logger } from '@nestjs/common';
-import {
-  createConceptPlannerAgent,
-  type ConceptDirection,
-} from '../concept-planner.agent';
-import {
-  RequirementExtractorSchema,
-  type RequirementExtractorOutput,
-} from '../requirement-extractor';
+import { Command } from '@langchain/langgraph';
+import { generateConceptDirection } from '../concept-planner.agent';
+import type { RequirementExtractorOutput } from '../requirement-extractor';
 
 const logger = new Logger('ConceptPlannerTool');
 
+type ConceptStepState = {
+  requirementsResult?: RequirementExtractorOutput;
+};
+
 /**
- * Tool wrapper for the concept planner sub-agent.
- * Generates poster concept directions from requirements.
+ * State transition tool for the concept handoff step.
  */
 export function createConceptPlannerTool() {
   return tool(
-    async ({
-      requirementsJson,
-    }: {
-      requirementsJson: string;
-    }): Promise<string> => {
-      logger.log(
-        `Invoking concept_planner tool with requirementsJson: ${requirementsJson}`,
-      );
-      let requirements: RequirementExtractorOutput;
-      try {
-        requirements = RequirementExtractorSchema.parse(
-          JSON.parse(requirementsJson),
-        );
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          throw new Error(`Invalid requirements: ${error.message}`);
+    async (
+      {
+        requirementsJson,
+      }: {
+        requirementsJson: string;
+      },
+      runtime: ToolRuntime<ConceptStepState>,
+    ): Promise<Command> => {
+      let requirementsResult = runtime.state.requirementsResult;
+
+      if (requirementsJson) {
+        try {
+          requirementsResult = JSON.parse(
+            requirementsJson,
+          ) as RequirementExtractorOutput;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Invalid JSON';
+          return new Command({
+            update: {
+              messages: [
+                new ToolMessage({
+                  content: `创意策划失败：requirementsJson 解析失败，${message}`,
+                  tool_call_id: runtime.toolCallId,
+                  name: 'concept_planner',
+                }),
+              ],
+              currentStep: 'completed',
+              finalError: `concept_planner failed: invalid requirementsJson: ${message}`,
+            },
+          });
         }
-        if (error instanceof SyntaxError) {
-          throw new Error(`Invalid JSON string: ${error.message}`);
-        }
-        throw new Error(
-          `Failed to parse requirements: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
+      }
+
+      if (!requirementsResult) {
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: '创意策划失败：缺少 requirementsResult 状态',
+                tool_call_id: runtime.toolCallId,
+                name: 'concept_planner',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError: 'concept_planner failed: missing requirementsResult',
+          },
+        });
       }
 
       try {
-        const input = `请基于以下活动信息生成海报创意方向：
+        logger.log('Invoking concept_planner handoff');
+        const direction = await generateConceptDirection(requirementsResult);
 
-活动名称：${requirements.activity.name}
-活动时间：${requirements.activity.startDate} 至 ${requirements.activity.endDate}
-
-活动事件：
-${requirements.activity.events.map((e) => `- ${e.name}: ${e.description}`).join('\n')}
-
-海报风格偏好：${requirements.poster.style}
-主题色调：${requirements.poster.theme}
-语言：${requirements.poster.language}
-颜色要求：${requirements.poster.color}
-尺寸：${requirements.poster.size}
-视觉约束：${requirements.poster.visualConstraints.join('、')}`;
-
-        const agent = createConceptPlannerAgent();
-
-        const result = await agent.invoke({
-          messages: [{ role: 'user', content: input }],
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: '海报创意方向生成完成，已移交到提示词构建阶段',
+                tool_call_id: runtime.toolCallId,
+                name: 'concept_planner',
+              }),
+            ],
+            conceptDirection: direction,
+            currentStep: 'prompt',
+          },
         });
-
-        const direction = (
-          result.structuredResponse as { direction: ConceptDirection }
-        ).direction;
-
-        logger.log(
-          `concept_planner tool returned direction: ${JSON.stringify(direction)}`,
-        );
-        return JSON.stringify({ direction });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         logger.error(
-          `concept_planner tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          `concept_planner handoff failed: ${message}`,
           error instanceof Error ? error.stack : undefined,
         );
-        return JSON.stringify({
-          error: `concept_planner failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: `海报创意方向生成失败：${message}`,
+                tool_call_id: runtime.toolCallId,
+                name: 'concept_planner',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError: `concept_planner failed: ${message}`,
+          },
         });
       }
     },
     {
       name: 'concept_planner',
       description:
-        'Generate 1 best poster concept direction from requirements. ' +
-        'Input: requirementsJson (string) - JSON string of poster requirements. ' +
-        'Output: JSON with concept direction containing style, color_palette, visual_elements, layout_hints, title_concept, image_prompt.',
+        'Generate 1 best poster concept direction from requirements and hand off to the prompt building step.',
       schema: z.object({
         requirementsJson: z
           .string()
