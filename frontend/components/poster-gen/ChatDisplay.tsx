@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   WsMessage,
   SuccessMessage,
+  ToolCallMessage,
 } from "@/lib/services/poster-gen.websocket";
 import {
   Loader2,
@@ -14,14 +15,30 @@ import {
   Download,
   Wrench,
   MessageSquarePlus,
+  UserRound,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+export interface ToolCallUiMessage extends ToolCallMessage {
+  completed?: boolean;
+  statusText?: string;
+}
+
+export interface UserRevisionUiMessage {
+  type: "user_revision";
+  content: string;
+}
+
+export type PosterGenUiMessage =
+  | Exclude<WsMessage, ToolCallMessage>
+  | ToolCallUiMessage
+  | UserRevisionUiMessage;
+
 interface ChatDisplayProps {
-  messages: WsMessage[];
+  messages: PosterGenUiMessage[];
   isGenerating: boolean;
   canRetry: boolean;
   onRetry: () => void;
@@ -41,51 +58,73 @@ export function ChatDisplay({
   onRevisionChange,
   onSubmitRevision,
 }: ChatDisplayProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollAreaHeight, setScrollAreaHeight] = useState<number | null>(null);
   const revisionLength = revisionValue.length;
   const canSubmitRevision =
     !isGenerating && revisionLength >= 10 && revisionLength <= 500;
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (containerRef.current) {
+      setScrollAreaHeight(containerRef.current.getBoundingClientRect().height);
+    }
+  }, []);
+
+  useEffect(() => {
+    const viewport = scrollRef.current?.querySelector<HTMLDivElement>(
+      "[data-slot='scroll-area-viewport']",
+    );
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
     }
   }, [messages, isGenerating, showRevisionComposer]);
 
   if (messages.length === 0 && !isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <ImageIcon className="h-12 w-12 mb-4 opacity-50" />
+      <div
+        ref={containerRef}
+        className="flex h-full flex-col items-center justify-center text-muted-foreground"
+      >
+        <ImageIcon className="mb-4 h-12 w-12 opacity-50" />
         <p>选择活动并输入需求，开始生成海报</p>
       </div>
     );
   }
 
   return (
-    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-      <div className="space-y-4">
-        {messages.map((message, index) => (
-          <MessageBubble
-            key={index}
-            message={message}
-            showRetry={canRetry && index === messages.length - 1}
-            onRetry={onRetry}
-          />
-        ))}
+    <div ref={containerRef} className="flex-1 min-h-0">
+      <ScrollArea
+        className="p-4"
+        ref={scrollRef}
+        style={
+          scrollAreaHeight ? { height: `${scrollAreaHeight}px` } : undefined
+        }
+      >
+        <div className="space-y-2">
+          {messages.map((message, index) => (
+            <MessageBubble
+              key={index}
+              message={message}
+              showRetry={canRetry && index === messages.length - 1}
+              onRetry={onRetry}
+            />
+          ))}
 
-        {isGenerating && <GeneratingIndicator />}
+          {isGenerating ? <GeneratingIndicator /> : null}
 
-        {showRevisionComposer && (
-          <RevisionComposer
-            value={revisionValue}
-            onChange={onRevisionChange}
-            onSubmit={onSubmitRevision}
-            disabled={isGenerating}
-            canSubmit={canSubmitRevision}
-          />
-        )}
-      </div>
-    </ScrollArea>
+          {showRevisionComposer && (
+            <RevisionComposer
+              value={revisionValue}
+              onChange={onRevisionChange}
+              onSubmit={onSubmitRevision}
+              disabled={isGenerating}
+              canSubmit={canSubmitRevision}
+            />
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 
@@ -94,7 +133,7 @@ function MessageBubble({
   showRetry,
   onRetry,
 }: {
-  message: WsMessage;
+  message: PosterGenUiMessage;
   showRetry: boolean;
   onRetry: () => void;
 }) {
@@ -113,35 +152,51 @@ function MessageBubble({
       );
 
     case "tool_call":
+      const isCompleted = Boolean(message.completed);
       return (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-          <Wrench className="h-5 w-5 text-blue-600 mt-0.5" />
+        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
+          {isCompleted ? (
+            <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
+          ) : (
+            <Wrench className="mt-0.5 h-5 w-5 text-blue-600" />
+          )}
           <div>
-            <p className="font-medium text-sm text-blue-800 dark:text-blue-200">
-              调用工具
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+              {isCompleted ? "工具调用已完成" : "调用工具"}
             </p>
-            <p className="text-muted-foreground text-sm mt-1">
-              {message.toolName}
-            </p>
-          </div>
-        </div>
-      );
-
-    case "generating":
-      return (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-          <Loader2 className="h-5 w-5 animate-spin text-primary mt-0.5" />
-          <div>
-            <p className="font-medium text-sm">生成中</p>
-            <p className="text-muted-foreground text-sm mt-1">
-              {message.content}
-            </p>
+            {isCompleted ? null : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {message.toolName}
+              </p>
+            )}
+            {message.statusText ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {message.statusText}
+              </p>
+            ) : null}
           </div>
         </div>
       );
 
     case "success":
       return <SuccessMessageBubble message={message} />;
+
+    case "user_revision":
+      return (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <div className="flex items-start gap-3">
+            <UserRound className="mt-0.5 h-5 w-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">
+                我的修改意见
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {message.content}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
 
     case "error":
       return (
@@ -197,7 +252,7 @@ function SuccessMessageBubble({ message }: { message: SuccessMessage }) {
             />
             <button
               onClick={handleDownload}
-              className="absolute top-2 right-2 flex items-center gap-1.5 px-3 py-1.5 bg-black/60 hover:bg-black/80 text-white text-sm rounded-md transition-colors"
+              className="absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/60 px-3 py-1.5 text-sm text-white transition-colors hover:bg-black/80"
             >
               <Download className="h-4 w-4" />
               <span>下载海报</span>
@@ -245,7 +300,7 @@ function RevisionComposer({
                   ? "text-destructive font-medium"
                   : isNearLimit
                     ? "text-yellow-600"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
               )}
             >
               {characterCount}/500
@@ -283,7 +338,7 @@ function RevisionComposer({
 
 function GeneratingIndicator() {
   return (
-    <div className="flex items-center gap-2 text-muted-foreground p-4">
+    <div className="flex items-center gap-2 p-4 text-muted-foreground">
       <Loader2 className="h-4 w-4 animate-spin" />
       <span className="text-sm">等待 AI 响应...</span>
     </div>

@@ -8,17 +8,74 @@ import {
 } from "@/lib/services/poster-gen.websocket";
 import { ActivitySelector } from "@/components/poster-gen/ActivitySelector";
 import { RequirementsInput } from "@/components/poster-gen/RequirementsInput";
-import { ChatDisplay } from "@/components/poster-gen/ChatDisplay";
+import {
+  ChatDisplay,
+  type PosterGenUiMessage,
+  type ToolCallUiMessage,
+  type UserRevisionUiMessage,
+} from "@/components/poster-gen/ChatDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+function updateMessages(
+  prev: PosterGenUiMessage[],
+  message: WsMessage
+): PosterGenUiMessage[] {
+  switch (message.type) {
+    case "thinking": {
+      const previous = prev.at(-1);
+      if (previous?.type === "thinking") {
+        return [...prev.slice(0, -1), message];
+      }
+      return [...prev, message];
+    }
+
+    case "tool_call":
+      return [
+        ...prev,
+        {
+          ...message,
+          completed: false,
+        },
+      ];
+
+    case "generating": {
+      const targetIndex = [...prev]
+        .reverse()
+        .findIndex(
+          (item) =>
+            item.type === "tool_call" &&
+            !(item as ToolCallUiMessage).completed
+        );
+
+      if (targetIndex === -1) {
+        return prev;
+      }
+
+      const actualIndex = prev.length - 1 - targetIndex;
+      return prev.map((item, index) =>
+        index === actualIndex
+          ? {
+              ...item,
+              completed: true,
+              statusText: message.content,
+            }
+          : item
+      );
+    }
+
+    default:
+      return [...prev, message];
+  }
+}
+
 export default function PosterGenPage() {
   const [activityId, setActivityId] = useState<number | null>(null);
   const [requirements, setRequirements] = useState("");
-  const [messages, setMessages] = useState<WsMessage[]>([]);
+  const [messages, setMessages] = useState<PosterGenUiMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [lastGeneratePayload, setLastGeneratePayload] = useState<{
     activityId: number;
@@ -37,7 +94,7 @@ export default function PosterGenPage() {
   }, [socket]);
 
   const handleMessage = useCallback((message: WsMessage) => {
-    setMessages((prev) => [...prev, message]);
+    setMessages((prev) => updateMessages(prev, message));
 
     if (message.type === "success") {
       setCurrentSessionId((message as SuccessMessage).sessionId);
@@ -145,11 +202,19 @@ export default function PosterGenPage() {
       return;
     }
 
+    const submittedRevision = revisionInput;
+    const revisionMessage: UserRevisionUiMessage = {
+      type: "user_revision",
+      content: submittedRevision,
+    };
+
+    setMessages((prev) => [...prev, revisionMessage]);
     setIsGenerating(true);
 
     try {
-      socket.revise(currentSessionId, revisionInput);
+      socket.revise(currentSessionId, submittedRevision);
     } catch (err) {
+      setMessages((prev) => prev.slice(0, -1));
       toast.error(err instanceof Error ? err.message : "提交修改失败");
       setIsGenerating(false);
     }
