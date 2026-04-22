@@ -75,17 +75,19 @@ export function buildPromptBuilderInput(
   revisionContext?: PromptBuilderRevisionContext,
 ): string {
   const revisionSection = revisionContext
-    ? `
-
-## Revision Context
-- User Revision Requirements: ${revisionContext.revisionRequirements}
-- Previous Concept Style: ${revisionContext.previousConceptDirection?.style ?? 'N/A'}
-- Previous Layout Hints: ${revisionContext.previousConceptDirection?.layout_hints ?? 'N/A'}
-- Previous Visual Elements: ${revisionContext.previousConceptDirection?.visual_elements.join(', ') ?? 'N/A'}
-- Previous Title Concept: ${revisionContext.previousConceptDirection?.title_concept ?? 'N/A'}
-- Previous Image Prompt: ${revisionContext.previousImagePrompt ?? 'N/A'}
-
-Please keep the core activity information consistent, preserve useful parts from the previous version when appropriate, and apply the new revision requirements clearly.`
+    ? [
+        '',
+        '## Revision Context',
+        `- User Revision Requirements: ${revisionContext.revisionRequirements}`,
+        `- Previous Concept Style: ${revisionContext.previousConceptDirection?.style ?? 'N/A'}`,
+        `- Previous Layout Hints: ${revisionContext.previousConceptDirection?.layout_hints ?? 'N/A'}`,
+        `- Previous Visual Elements: ${revisionContext.previousConceptDirection?.visual_elements?.join(', ') ?? 'N/A'}`,
+        `- Previous Title Concept: ${revisionContext.previousConceptDirection?.title_concept ?? 'N/A'}`,
+        `- Previous Image Prompt: ${revisionContext.previousImagePrompt ?? 'N/A'}`,
+        '',
+        'Please keep the core activity information consistent, preserve useful parts from the previous version when appropriate, and apply the new revision requirements clearly.',
+        'When the next step receives the previous poster image, treat this as an edit request: keep the confirmed composition, subject, and visual identity unless the revision explicitly asks to change them. Avoid rewriting the whole poster from scratch.',
+      ].join('\n')
     : '';
 
   return `Please generate an image generation prompt based on the following information:

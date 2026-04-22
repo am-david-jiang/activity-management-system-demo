@@ -1,4 +1,5 @@
 import { tool } from '@langchain/core/tools';
+import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { ChatGoogle } from '@langchain/google/node';
 import { Logger } from '@nestjs/common';
@@ -39,6 +40,11 @@ type NanoBananaInput = z.infer<typeof NanoBananaSchema>;
 
 type ImageStepState = {
   imagePrompt?: string;
+  previousFinalImage?: {
+    imageUrl: string;
+    mimeType: string;
+    filename: string;
+  };
   requirementsResult?: {
     poster?: {
       size?: string;
@@ -51,6 +57,15 @@ type ImageContentBlock = {
   mimeType?: string;
   data?: string | ArrayBuffer | Uint8Array;
   fileId?: string;
+  inlineData?: {
+    mimeType?: string;
+    data?: string;
+  };
+  fileData?: {
+    mimeType?: string;
+    fileUri?: string;
+  };
+  reasoningContentBlock?: ImageContentBlock;
 };
 
 export function getImageModelCandidates(): string[] {
@@ -74,9 +89,90 @@ export function extractImageFromContentBlocks(
   contentBlocks: ImageContentBlock[],
 ): { imageBuffer: Buffer; mimeType: string } | null {
   for (const block of contentBlocks) {
+    const candidate = isReasoningBlock(block)
+      ? block.reasoningContentBlock
+      : block;
+    const extracted = extractImageFromBlock(candidate);
+    if (extracted) {
+      return extracted;
+    }
   }
 
   return null;
+}
+
+function extractImageFromBlock(
+  block: ImageContentBlock | undefined,
+): { imageBuffer: Buffer; mimeType: string } | null {
+  if (!block) {
+    return null;
+  }
+
+  if (isInlineDataBlock(block)) {
+    if (
+      block.inlineData?.mimeType?.startsWith('image/') &&
+      block.inlineData.data
+    ) {
+      return {
+        imageBuffer: Buffer.from(block.inlineData.data, 'base64'),
+        mimeType: block.inlineData.mimeType,
+      };
+    }
+
+    return null;
+  }
+
+  if (isLegacyFileBlock(block)) {
+    const mimeType = block.mimeType ?? 'image/jpeg';
+    if (mimeType.startsWith('image/') && block.data) {
+      return {
+        imageBuffer: coerceBlockDataToBuffer(block.data),
+        mimeType,
+      };
+    }
+  }
+
+  return null;
+}
+
+function coerceBlockDataToBuffer(
+  data: string | ArrayBuffer | Uint8Array,
+): Buffer {
+  if (typeof data === 'string') {
+    return Buffer.from(data, 'base64');
+  }
+
+  if (data instanceof Uint8Array) {
+    return Buffer.from(data);
+  }
+
+  return Buffer.from(data);
+}
+
+function isInlineDataBlock(
+  block: ImageContentBlock,
+): block is ImageContentBlock & {
+  inlineData: { mimeType?: string; data?: string };
+} {
+  return block.type === 'inlineData' && block.inlineData != null;
+}
+
+function isFileDataBlock(
+  block: ImageContentBlock,
+): block is ImageContentBlock & {
+  fileData: { mimeType?: string; fileUri?: string };
+} {
+  return block.type === 'fileData' && block.fileData != null;
+}
+
+function isLegacyFileBlock(block: ImageContentBlock): boolean {
+  return block.type === 'file' && block.data != null;
+}
+
+function isReasoningBlock(
+  block: ImageContentBlock,
+): block is ImageContentBlock & { reasoningContentBlock?: ImageContentBlock } {
+  return block.type === 'reasoning' && block.reasoningContentBlock != null;
 }
 
 function summarizeContentBlocks(contentBlocks: ImageContentBlock[]): string {
@@ -89,17 +185,18 @@ function summarizeContentBlocks(contentBlocks: ImageContentBlock[]): string {
         };
       }
 
+      const normalizedBlock = block as ImageContentBlock;
       return {
-        type: block.type,
-        mimeType: 'mimeType' in block ? block.mimeType : undefined,
-        hasData: 'data' in block ? block.data != null : undefined,
-        hasInlineData: isInlineDataBlock(block)
-          ? block.inlineData?.data != null
+        type: normalizedBlock.type,
+        mimeType: normalizedBlock.mimeType,
+        hasData: normalizedBlock.data != null,
+        hasInlineData: isInlineDataBlock(normalizedBlock)
+          ? normalizedBlock.inlineData?.data != null
           : undefined,
-        hasFileData: isFileDataBlock(block)
-          ? block.fileData?.fileUri != null
+        hasFileData: isFileDataBlock(normalizedBlock)
+          ? normalizedBlock.fileData?.fileUri != null
           : undefined,
-        fileId: 'fileId' in block ? block.fileId : undefined,
+        fileId: normalizedBlock.fileId,
       };
     }),
     null,
@@ -118,6 +215,63 @@ export function inferAspectRatio(size?: string): string {
   }
 
   return SUPPORTED_ASPECT_RATIOS.includes(match[1]) ? match[1] : '16:9';
+}
+
+export function buildImageGenerationInput(
+  prompt: string,
+  previousFinalImage?: {
+    imageUrl: string;
+    mimeType?: string;
+    filename?: string;
+  },
+): string | HumanMessage[] {
+  if (!previousFinalImage?.imageUrl) {
+    return prompt;
+  }
+
+  if (!fs.existsSync(previousFinalImage.imageUrl)) {
+    throw new Error(
+      `Previous image file not found: ${previousFinalImage.imageUrl}`,
+    );
+  }
+
+  const imageBase64Str = fs
+    .readFileSync(previousFinalImage.imageUrl)
+    .toString('base64');
+  const mimeType =
+    previousFinalImage.mimeType ||
+    inferMimeTypeFromPath(previousFinalImage.imageUrl);
+  const imageDataUrl = `data:${mimeType};base64,${imageBase64Str}`;
+
+  return [
+    new HumanMessage({
+      content: [
+        {
+          type: 'text',
+          text:
+            'Edit the provided poster image. Preserve the confirmed composition, subject, and visual identity unless the new prompt explicitly requests a change. Make targeted revisions on top of the existing poster instead of regenerating a completely different image.\n\n' +
+            prompt,
+        },
+        {
+          type: 'image_url',
+          image_url: {
+            url: imageDataUrl,
+          },
+        },
+      ],
+    }),
+  ];
+}
+
+function inferMimeTypeFromPath(filepath: string): string {
+  const ext = path.extname(filepath).toLowerCase();
+  if (ext === '.png') {
+    return 'image/png';
+  }
+  if (ext === '.webp') {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
 }
 
 export function createNanoBananaTool() {
@@ -153,6 +307,10 @@ export function createNanoBananaTool() {
         }
 
         const modelCandidates = getImageModelCandidates();
+        const modelInput = buildImageGenerationInput(
+          resolvedPrompt,
+          runtime.state.previousFinalImage,
+        );
         let response: Awaited<ReturnType<ChatGoogle['invoke']>> | undefined;
         let lastError: unknown;
 
@@ -170,7 +328,7 @@ export function createNanoBananaTool() {
                 responseModalities: ['IMAGE', 'TEXT'],
               });
 
-              response = await model.invoke(resolvedPrompt);
+              response = await model.invoke(modelInput);
               logger.log(
                 `generate_image_nano_banana succeeded with model ${modelName}${requestConfig.imageConfig?.aspectRatio ? ` and aspect ratio ${requestConfig.imageConfig.aspectRatio}` : ' without aspect ratio'}`,
               );

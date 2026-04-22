@@ -1,9 +1,13 @@
 import {
+  buildImageGenerationInput,
   extractImageFromContentBlocks,
   getImageModelCandidates,
   inferAspectRatio,
   shouldRetryWithoutAspectRatio,
 } from './nano-banana.tool';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 describe('inferAspectRatio', () => {
   it('extracts supported ratios from poster size text', () => {
@@ -118,5 +122,54 @@ describe('extractImageFromContentBlocks', () => {
 
     expect(result?.mimeType).toBe('image/png');
     expect(result?.imageBuffer.toString()).toBe('reasoning-image');
+  });
+});
+
+describe('buildImageGenerationInput', () => {
+  it('returns plain prompt when there is no previous image', () => {
+    expect(buildImageGenerationInput('生成新的海报提示词')).toBe(
+      '生成新的海报提示词',
+    );
+  });
+
+  it('builds a multimodal edit request when previous image is available', () => {
+    const imagePath = path.join(os.tmpdir(), `nano-banana-test-${Date.now()}.png`);
+    fs.writeFileSync(imagePath, Buffer.from('previous-image'));
+
+    try {
+      const input = buildImageGenerationInput('把标题改得更醒目', {
+        imageUrl: imagePath,
+        mimeType: 'image/png',
+        filename: 'previous.png',
+      });
+
+      expect(Array.isArray(input)).toBe(true);
+      const [message] = input as Array<{ content: unknown }>;
+      expect(Array.isArray(message.content)).toBe(true);
+        expect(message.content).toEqual([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining('Edit the provided poster image.'),
+          }),
+          expect.objectContaining({
+            type: 'image_url',
+            image_url: {
+              url: expect.stringContaining('data:image/png;base64,'),
+            },
+          }),
+        ]);
+    } finally {
+      fs.unlinkSync(imagePath);
+    }
+  });
+
+  it('fails fast when revision image file is missing', () => {
+    expect(() =>
+      buildImageGenerationInput('调整配色', {
+        imageUrl: '/tmp/non-existent-poster.png',
+        mimeType: 'image/png',
+        filename: 'missing.png',
+      }),
+    ).toThrow('Previous image file not found');
   });
 });

@@ -47,6 +47,8 @@ describe('buildPromptBuilderInput', () => {
     expect(input).toContain('## Revision Context');
     expect(input).toContain('整体更明亮，标题更醒目，减少装饰元素');
     expect(input).toContain('上一轮提示词');
+    expect(input).toContain('treat this as an edit request');
+    expect(input).toContain('Avoid rewriting the whole poster from scratch');
   });
 
   it('omits revision context when not provided', () => {
