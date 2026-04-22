@@ -110,7 +110,9 @@ export function createRevisionPlannerTool() {
       schema: z.object({
         revisionRequirements: z
           .string()
-          .describe('User feedback describing how the poster should be revised'),
+          .describe(
+            'User feedback describing how the poster should be revised',
+          ),
       }),
     },
   );

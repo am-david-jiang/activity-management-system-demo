@@ -1,7 +1,11 @@
 import { createAgent } from 'langchain';
+import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import type { RequirementExtractorOutput } from './requirement-extractor';
 import type { ConceptDirection } from './concept-planner.agent';
+
+const logger = new Logger('PromptBuilderAgent');
+const MAX_LOG_PROMPT_LENGTH = 500;
 
 const SYSTEM_PROMPT = `You are a professional activity poster prompt builder expert. Your task is to generate a detailed Chinese image generation prompt based on the provided activity information, poster requirements, and concept direction.
 
@@ -37,6 +41,16 @@ export type PromptBuilderRevisionContext = {
   previousImagePrompt?: string;
 };
 
+function formatPromptForLog(prompt: string): string {
+  const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
+
+  if (normalizedPrompt.length <= MAX_LOG_PROMPT_LENGTH) {
+    return normalizedPrompt;
+  }
+
+  return `${normalizedPrompt.slice(0, MAX_LOG_PROMPT_LENGTH)}...`;
+}
+
 export function createPromptBuilderAgent(model: string = 'openai:gpt-5.4') {
   const agent = createAgent({
     model,
@@ -66,7 +80,10 @@ export async function generatePrompt(
     messages: [{ role: 'user', content: input }],
   });
 
-  return (result.structuredResponse as PromptBuilderOutput).prompt;
+  const prompt = (result.structuredResponse as PromptBuilderOutput).prompt;
+  logger.log(`Generated prompt result: ${formatPromptForLog(prompt)}`);
+
+  return prompt;
 }
 
 export function buildPromptBuilderInput(

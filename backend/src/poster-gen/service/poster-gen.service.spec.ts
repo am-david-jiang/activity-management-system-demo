@@ -14,14 +14,13 @@ describe('PosterGenService', () => {
       getState?: jest.Mock;
     },
   ) {
-    (
-      service as unknown as { getOrchestrator: () => unknown }
-    ).getOrchestrator = () => ({
-      agent: {
-        stream: params.stream,
-        getState: params.getState ?? jest.fn(),
-      },
-    });
+    (service as unknown as { getOrchestrator: () => unknown }).getOrchestrator =
+      () => ({
+        agent: {
+          stream: params.stream,
+          getState: params.getState ?? jest.fn(),
+        },
+      });
   }
 
   it('returns an error when revising a missing session', async () => {

@@ -9,10 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PosterGenService } from '../service/poster-gen.service';
-import {
-  GeneratePosterDto,
-  RevisePosterDto,
-} from '../dto/generate-poster.dto';
+import { GeneratePosterDto, RevisePosterDto } from '../dto/generate-poster.dto';
 import { WsMessage } from '../dto/ws-message.dto';
 
 @WebSocketGateway({

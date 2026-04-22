@@ -33,7 +33,8 @@ export function createPromptBuilderTool() {
     ): Promise<Command> => {
       let requirementsResult = runtime.state.requirementsResult;
       let conceptDirection =
-        runtime.state.revisionConceptDirection ?? runtime.state.conceptDirection;
+        runtime.state.revisionConceptDirection ??
+        runtime.state.conceptDirection;
 
       if (requirementsJson) {
         try {

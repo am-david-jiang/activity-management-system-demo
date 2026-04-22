@@ -58,9 +58,9 @@ describe('shouldRetryWithoutAspectRatio', () => {
   });
 
   it('does not retry for unrelated failures', () => {
-    expect(
-      shouldRetryWithoutAspectRatio(new Error('Permission denied')),
-    ).toBe(false);
+    expect(shouldRetryWithoutAspectRatio(new Error('Permission denied'))).toBe(
+      false,
+    );
   });
 });
 
@@ -133,7 +133,10 @@ describe('buildImageGenerationInput', () => {
   });
 
   it('builds a multimodal edit request when previous image is available', () => {
-    const imagePath = path.join(os.tmpdir(), `nano-banana-test-${Date.now()}.png`);
+    const imagePath = path.join(
+      os.tmpdir(),
+      `nano-banana-test-${Date.now()}.png`,
+    );
     fs.writeFileSync(imagePath, Buffer.from('previous-image'));
 
     try {
@@ -146,18 +149,18 @@ describe('buildImageGenerationInput', () => {
       expect(Array.isArray(input)).toBe(true);
       const [message] = input as Array<{ content: unknown }>;
       expect(Array.isArray(message.content)).toBe(true);
-        expect(message.content).toEqual([
-          expect.objectContaining({
-            type: 'text',
-            text: expect.stringContaining('Edit the provided poster image.'),
-          }),
-          expect.objectContaining({
-            type: 'image_url',
-            image_url: {
-              url: expect.stringContaining('data:image/png;base64,'),
-            },
-          }),
-        ]);
+      expect(message.content).toEqual([
+        expect.objectContaining({
+          type: 'text',
+          text: expect.stringContaining('Edit the provided poster image.'),
+        }),
+        expect.objectContaining({
+          type: 'image_url',
+          image_url: {
+            url: expect.stringContaining('data:image/png;base64,'),
+          },
+        }),
+      ]);
     } finally {
       fs.unlinkSync(imagePath);
     }

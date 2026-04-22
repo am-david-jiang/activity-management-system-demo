@@ -281,14 +281,19 @@ function formatPrompt(
   const directionJson = state.conceptDirection
     ? JSON.stringify(state.conceptDirection)
     : '';
-  const activeDirectionJson = JSON.stringify(getActiveConceptDirection(state) ?? {});
+  const activeDirectionJson = JSON.stringify(
+    getActiveConceptDirection(state) ?? {},
+  );
   const previousDirectionJson = state.previousConceptDirection
     ? JSON.stringify(state.previousConceptDirection)
     : '';
   const aspectRatio = state.requirementsResult?.poster?.size ?? '';
 
   return template
-    .replace('{activityId}', state.activityId != null ? String(state.activityId) : '')
+    .replace(
+      '{activityId}',
+      state.activityId != null ? String(state.activityId) : '',
+    )
     .replace('{userRequirements}', state.userRequirements ?? '')
     .replace('{revisionRequirements}', state.revisionRequirements ?? '')
     .replace('{requirementsJson}', requirementsJson)
@@ -298,7 +303,10 @@ function formatPrompt(
     .replace('{imagePrompt}', state.imagePrompt ?? '')
     .replace('{previousImagePrompt}', state.previousImagePrompt ?? '')
     .replace('{aspectRatio}', aspectRatio)
-    .replace('{previousFinalImageUrl}', state.previousFinalImage?.imageUrl ?? '')
+    .replace(
+      '{previousFinalImageUrl}',
+      state.previousFinalImage?.imageUrl ?? '',
+    )
     .replace('{finalImageUrl}', state.finalImage?.imageUrl ?? '')
     .replace('{finalImageMimeType}', state.finalImage?.mimeType ?? '')
     .replace('{finalImageFilename}', state.finalImage?.filename ?? '')
@@ -403,8 +411,11 @@ export function createOrchestratorAgent(
     name: 'poster_generation_handoffs',
     stateSchema: PosterOrchestrationStateSchema,
     wrapModelCall: async (request, handler) => {
-      const currentStep = (request.state.currentStep ?? 'requirements') as StepKey;
-      validateStepState(currentStep, request.state as Partial<OrchestratorState>);
+      const currentStep = request.state.currentStep ?? 'requirements';
+      validateStepState(
+        currentStep,
+        request.state as Partial<OrchestratorState>,
+      );
 
       const config = stepConfig[currentStep];
       return handler({
