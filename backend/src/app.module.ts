@@ -8,17 +8,14 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { ActivityModule } from './activity/activity.module';
 import { PosterGenModule } from './poster-gen/poster-gen.module';
+import { getTypeOrmConfig } from './database/typeorm.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: true,
+      ...getTypeOrmConfig(),
       autoLoadEntities: true,
-      synchronize: false,
-      migrations: ['src/migrations/*.ts'],
     }),
     UserModule,
     AuthModule,

@@ -60,13 +60,19 @@ export async function getActivityParticipants(
   activityId: number,
 ): Promise<import("./participant-api").Participant[]> {
   const res = await authClient.get(`activities/${activityId}/participants`);
-  return (await handleResponseWithAuth<import("./participant-api").Participant[]>(res)) ?? [];
+  return (
+    (await handleResponseWithAuth<import("./participant-api").Participant[]>(
+      res,
+    )) ?? []
+  );
 }
 
 export async function addParticipantToActivity(
   activityId: number,
   userId: string,
 ): Promise<void> {
-  const res = await authClient.post(`activities/${activityId}/participants/${userId}`);
+  const res = await authClient.post(
+    `activities/${activityId}/participants/${userId}`,
+  );
   await handleResponseWithAuth<void>(res);
 }

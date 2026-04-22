@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PosterGenService } from '../service/poster-gen.service';
-import { GeneratePosterDto } from '../dto/generate-poster.dto';
+import { GeneratePosterDto, RevisePosterDto } from '../dto/generate-poster.dto';
 import { WsMessage } from '../dto/ws-message.dto';
 
 @WebSocketGateway({
@@ -66,6 +66,59 @@ export class PosterGenGateway
 
     try {
       for await (const message of this.posterGenService.generatePoster(
+        dto,
+        client.id,
+      )) {
+        if (
+          message.type === 'success' &&
+          'buffer' in message &&
+          message.buffer
+        ) {
+          const { buffer, ...metadata } = message;
+          client.emit('success', metadata);
+          client.emit('success_buffer', buffer);
+        } else {
+          client.emit(message.type, message);
+        }
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Internal server error';
+      client.emit('error', {
+        type: 'error',
+        message: errorMessage,
+      } as WsMessage);
+    }
+  }
+
+  @SubscribeMessage('revise')
+  async handleRevise(
+    @MessageBody() data: RevisePosterDto,
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    if (!data.sessionId || !data.revisionRequirements) {
+      client.emit('error', {
+        type: 'error',
+        message: 'sessionId and revisionRequirements are required',
+      } as WsMessage);
+      return;
+    }
+
+    if (data.revisionRequirements.length > 500) {
+      client.emit('error', {
+        type: 'error',
+        message: 'Revision requirements cannot exceed 500 characters',
+      } as WsMessage);
+      return;
+    }
+
+    const dto: RevisePosterDto = {
+      sessionId: data.sessionId,
+      revisionRequirements: data.revisionRequirements,
+    };
+
+    try {
+      for await (const message of this.posterGenService.revisePoster(
         dto,
         client.id,
       )) {
