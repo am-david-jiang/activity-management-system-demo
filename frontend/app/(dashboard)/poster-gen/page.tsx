@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getPosterGenSocket,
   type WsMessage,
+  type SuccessMessage,
 } from "@/lib/services/poster-gen.websocket";
 import { ActivitySelector } from "@/components/poster-gen/ActivitySelector";
 import { RequirementsInput } from "@/components/poster-gen/RequirementsInput";
@@ -18,6 +19,12 @@ export default function PosterGenPage() {
   const [activityId, setActivityId] = useState<number | null>(null);
   const [requirements, setRequirements] = useState("");
   const [messages, setMessages] = useState<WsMessage[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [lastGeneratePayload, setLastGeneratePayload] = useState<{
+    activityId: number;
+    requirements: string;
+  } | null>(null);
+  const [revisionInput, setRevisionInput] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -32,7 +39,14 @@ export default function PosterGenPage() {
   const handleMessage = useCallback((message: WsMessage) => {
     setMessages((prev) => [...prev, message]);
 
-    if (message.type === "success" || message.type === "error") {
+    if (message.type === "success") {
+      setCurrentSessionId((message as SuccessMessage).sessionId);
+      setRevisionInput("");
+      setIsGenerating(false);
+      return;
+    }
+
+    if (message.type === "error") {
       setIsGenerating(false);
     }
   }, []);
@@ -85,6 +99,12 @@ export default function PosterGenPage() {
     }
 
     setMessages([]);
+    setCurrentSessionId(null);
+    setRevisionInput("");
+    setLastGeneratePayload({
+      activityId,
+      requirements,
+    });
     setIsGenerating(true);
 
     try {
@@ -94,6 +114,53 @@ export default function PosterGenPage() {
       setIsGenerating(false);
     }
   };
+
+  const handleRetry = () => {
+    if (!lastGeneratePayload) {
+      toast.error("缺少可重试的生成请求");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      socket.generate(
+        lastGeneratePayload.activityId,
+        lastGeneratePayload.requirements
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "重新生成失败");
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSubmitRevision = () => {
+    if (!currentSessionId) {
+      toast.error("当前没有可修改的海报结果");
+      return;
+    }
+
+    if (revisionInput.length < 10) {
+      toast.error("修改意见至少需要 10 个字符");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      socket.revise(currentSessionId, revisionInput);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "提交修改失败");
+      setIsGenerating(false);
+    }
+  };
+
+  const latestMessage = messages.at(-1);
+  const canRetry =
+    !isGenerating &&
+    latestMessage?.type === "error" &&
+    lastGeneratePayload !== null;
+  const showRevisionComposer = !isGenerating && currentSessionId !== null;
 
   const canGenerate =
     activityId !== null &&
@@ -171,7 +238,16 @@ export default function PosterGenPage() {
             <CardTitle className="text-lg">生成结果</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 p-0">
-            <ChatDisplay messages={messages} isGenerating={isGenerating} />
+            <ChatDisplay
+              messages={messages}
+              isGenerating={isGenerating}
+              canRetry={canRetry}
+              onRetry={handleRetry}
+              showRevisionComposer={showRevisionComposer}
+              revisionValue={revisionInput}
+              onRevisionChange={setRevisionInput}
+              onSubmitRevision={handleSubmitRevision}
+            />
           </CardContent>
         </Card>
       </div>
