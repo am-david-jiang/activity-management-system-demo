@@ -10,9 +10,14 @@ export type {
   ConceptDirection,
   ConceptPlannerOutput,
 } from './concept-planner.agent';
+export {
+  createRevisionPlannerAgent,
+  generateRevisionConceptDirection,
+} from './revision-planner.agent';
 
 export { createRequirementExtractorTool } from './tools/requirement-extractor.tool';
 export { createConceptPlannerTool } from './tools/concept-planner.tool';
+export { createRevisionPlannerTool } from './tools/revision-planner.tool';
 
 export { createOrchestratorAgent } from './orchestrator.agent';
 export type {

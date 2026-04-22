@@ -1,6 +1,6 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { ChatGoogle } from '@langchain/google';
+import { ChatGoogle } from '@langchain/google/node';
 import { Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,6 +10,8 @@ import { Command } from '@langchain/langgraph';
 import { ToolMessage, type ToolRuntime } from 'langchain';
 
 const logger = new Logger('NanoBananaTool');
+
+const DEFAULT_IMAGE_MODELS = ['gemini-2.5-flash-image'] as const;
 
 const SUPPORTED_ASPECT_RATIOS = [
   '1:1',
@@ -43,6 +45,67 @@ type ImageStepState = {
     };
   };
 };
+
+type ImageContentBlock = {
+  type?: string;
+  mimeType?: string;
+  data?: string | ArrayBuffer | Uint8Array;
+  fileId?: string;
+};
+
+export function getImageModelCandidates(): string[] {
+  const configuredModel = process.env.GOOGLE_IMAGE_MODEL?.trim();
+  if (configuredModel) {
+    return [
+      configuredModel,
+      ...DEFAULT_IMAGE_MODELS.filter((model) => model !== configuredModel),
+    ];
+  }
+
+  return [...DEFAULT_IMAGE_MODELS];
+}
+
+export function shouldRetryWithoutAspectRatio(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /invalid argument/i.test(message);
+}
+
+export function extractImageFromContentBlocks(
+  contentBlocks: ImageContentBlock[],
+): { imageBuffer: Buffer; mimeType: string } | null {
+  for (const block of contentBlocks) {
+  }
+
+  return null;
+}
+
+function summarizeContentBlocks(contentBlocks: ImageContentBlock[]): string {
+  return JSON.stringify(
+    contentBlocks.map((block) => {
+      if (isReasoningBlock(block)) {
+        return {
+          type: block.type,
+          reasoningContentType: block.reasoningContentBlock?.type,
+        };
+      }
+
+      return {
+        type: block.type,
+        mimeType: 'mimeType' in block ? block.mimeType : undefined,
+        hasData: 'data' in block ? block.data != null : undefined,
+        hasInlineData: isInlineDataBlock(block)
+          ? block.inlineData?.data != null
+          : undefined,
+        hasFileData: isFileDataBlock(block)
+          ? block.fileData?.fileUri != null
+          : undefined,
+        fileId: 'fileId' in block ? block.fileId : undefined,
+      };
+    }),
+    null,
+    2,
+  );
+}
 
 export function inferAspectRatio(size?: string): string {
   if (!size) {
@@ -89,56 +152,83 @@ export function createNanoBananaTool() {
           throw new Error('GOOGLE_API_KEY environment variable is not set');
         }
 
-        const model = new ChatGoogle({
-          model: 'gemini-3.1-flash-image-preview',
-          apiKey,
-          imageConfig: {
-            aspectRatio: normalizedAspectRatio,
-          },
-          responseModalities: ['IMAGE', 'TEXT'],
-        });
+        const modelCandidates = getImageModelCandidates();
+        let response: Awaited<ReturnType<ChatGoogle['invoke']>> | undefined;
+        let lastError: unknown;
 
-        const response = await model.invoke(resolvedPrompt);
+        for (const modelName of modelCandidates) {
+          const requestConfigs: Array<{
+            imageConfig?: { aspectRatio?: string };
+          }> = [{ imageConfig: { aspectRatio: normalizedAspectRatio } }];
 
-        if (!response.contentBlocks) {
+          for (const requestConfig of requestConfigs) {
+            try {
+              const model = new ChatGoogle({
+                model: modelName,
+                apiKey,
+                ...requestConfig,
+                responseModalities: ['IMAGE', 'TEXT'],
+              });
+
+              response = await model.invoke(resolvedPrompt);
+              logger.log(
+                `generate_image_nano_banana succeeded with model ${modelName}${requestConfig.imageConfig?.aspectRatio ? ` and aspect ratio ${requestConfig.imageConfig.aspectRatio}` : ' without aspect ratio'}`,
+              );
+              break;
+            } catch (error) {
+              lastError = error;
+              const canRetryWithoutAspectRatio =
+                requestConfig.imageConfig?.aspectRatio &&
+                shouldRetryWithoutAspectRatio(error);
+
+              logger.warn(
+                `generate_image_nano_banana request failed for model ${modelName}${requestConfig.imageConfig?.aspectRatio ? ` with aspect ratio ${requestConfig.imageConfig.aspectRatio}` : ''}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
+
+              if (canRetryWithoutAspectRatio) {
+                requestConfigs.push({});
+              }
+            }
+          }
+
+          if (response) {
+            break;
+          }
+        }
+
+        if (!response) {
+          throw (
+            lastError ??
+            new Error('Image generation failed before receiving a response')
+          );
+        }
+
+        const responseBlocks = Array.isArray(response.contentBlocks)
+          ? (response.contentBlocks as ImageContentBlock[])
+          : Array.isArray(response.content)
+            ? (response.content as ImageContentBlock[])
+            : [];
+
+        if (responseBlocks.length === 0) {
           throw new Error(
             'No response contentBlocks from Gemini image generation',
           );
         }
 
-        let imageBuffer: Buffer | null = null;
-        let mimeType = 'image/png';
+        const extractedImage = extractImageFromContentBlocks(responseBlocks);
 
-        for (const block of response.contentBlocks) {
-          if (block.type === 'file' && block.data) {
-            if (block.data instanceof Uint8Array) {
-              imageBuffer = Buffer.from(block.data);
-            } else if (
-              typeof block.data === 'object' &&
-              block.data !== null &&
-              'byteLength' in block.data
-            ) {
-              imageBuffer = Buffer.from(block.data as ArrayBuffer);
-            } else if (typeof block.data === 'string') {
-              const base64Match = block.data.match(
-                /^data:image\/\w+;base64,(.+)$/,
-              );
-              if (base64Match) {
-                imageBuffer = Buffer.from(base64Match[1], 'base64');
-              } else {
-                imageBuffer = Buffer.from(block.data, 'base64');
-              }
-            }
-            mimeType = (block.mimeType || 'image/png').split(';')[0];
-            break;
-          }
-        }
-
-        if (!imageBuffer) {
+        if (!extractedImage) {
+          logger.warn(
+            `Gemini response did not contain extractable image blocks. Blocks: ${summarizeContentBlocks(responseBlocks)}`,
+          );
           throw new Error(
             'No image generated. Gemini did not return an image.',
           );
         }
+
+        const { imageBuffer, mimeType } = extractedImage;
 
         const tempDir = path.join(os.tmpdir(), 'poster-gen');
         if (!fs.existsSync(tempDir)) {

@@ -11,6 +11,9 @@ const logger = new Logger('PromptBuilderTool');
 type PromptStepState = {
   requirementsResult?: RequirementExtractorOutput;
   conceptDirection?: ConceptDirection;
+  revisionConceptDirection?: ConceptDirection;
+  revisionRequirements?: string;
+  previousImagePrompt?: string;
 };
 
 /**
@@ -29,7 +32,8 @@ export function createPromptBuilderTool() {
       runtime: ToolRuntime<PromptStepState>,
     ): Promise<Command> => {
       let requirementsResult = runtime.state.requirementsResult;
-      let conceptDirection = runtime.state.conceptDirection;
+      let conceptDirection =
+        runtime.state.revisionConceptDirection ?? runtime.state.conceptDirection;
 
       if (requirementsJson) {
         try {
@@ -100,6 +104,13 @@ export function createPromptBuilderTool() {
         const prompt = await generatePrompt(
           requirementsResult,
           conceptDirection,
+          runtime.state.revisionRequirements
+            ? {
+                revisionRequirements: runtime.state.revisionRequirements,
+                previousConceptDirection: runtime.state.conceptDirection,
+                previousImagePrompt: runtime.state.previousImagePrompt,
+              }
+            : undefined,
         );
 
         return new Command({

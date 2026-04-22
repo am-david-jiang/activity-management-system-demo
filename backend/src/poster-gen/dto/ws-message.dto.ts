@@ -23,6 +23,7 @@ export interface GeneratingMessage {
 
 export interface SuccessMessage {
   type: 'success';
+  sessionId: string;
   filename: string;
   mimeType: string;
   message: string;

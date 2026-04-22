@@ -91,3 +91,19 @@ export class UserRequestNewDecisionDto {
   @IsNotEmpty()
   sessionId: string;
 }
+
+export class RevisePosterDto {
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(10, {
+    message: 'Revision requirements must be at least 10 characters',
+  })
+  @MaxLength(500, {
+    message: 'Revision requirements cannot exceed 500 characters',
+  })
+  revisionRequirements: string;
+}

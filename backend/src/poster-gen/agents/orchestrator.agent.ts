@@ -7,6 +7,7 @@ import { createRequirementExtractorTool } from './tools/requirement-extractor.to
 import { createConceptPlannerTool } from './tools/concept-planner.tool';
 import { createPromptBuilderTool } from './tools/prompt-builder.tool';
 import { createNanoBananaTool } from './tools/nano-banana.tool';
+import { createRevisionPlannerTool } from './tools/revision-planner.tool';
 import type { ConceptDirection } from './concept-planner.agent';
 import {
   RequirementExtractorSchema,
@@ -16,6 +17,7 @@ import {
 const OrchestratorStepSchema = z.enum([
   'requirements',
   'concept',
+  'revision',
   'prompt',
   'image',
   'completed',
@@ -31,6 +33,7 @@ const PosterOrchestrationStateSchema = z.object({
   currentStep: OrchestratorStepSchema.optional(),
   activityId: z.number().optional(),
   userRequirements: z.string().optional(),
+  revisionRequirements: z.string().optional(),
   requirementsResult: RequirementExtractorSchema.optional(),
   conceptDirection: z
     .object({
@@ -45,7 +48,35 @@ const PosterOrchestrationStateSchema = z.object({
       title_concept: z.string(),
     })
     .optional(),
+  revisionConceptDirection: z
+    .object({
+      style: z.string(),
+      color_palette: z.object({
+        primary: z.string(),
+        secondary: z.string(),
+        accent: z.string(),
+      }),
+      visual_elements: z.array(z.string()),
+      layout_hints: z.string(),
+      title_concept: z.string(),
+    })
+    .optional(),
   imagePrompt: z.string().optional(),
+  previousImagePrompt: z.string().optional(),
+  previousConceptDirection: z
+    .object({
+      style: z.string(),
+      color_palette: z.object({
+        primary: z.string(),
+        secondary: z.string(),
+        accent: z.string(),
+      }),
+      visual_elements: z.array(z.string()),
+      layout_hints: z.string(),
+      title_concept: z.string(),
+    })
+    .optional(),
+  previousFinalImage: FinalImageSchema.optional(),
   finalImage: FinalImageSchema.optional(),
   finalError: z.string().optional(),
 });
@@ -84,18 +115,41 @@ Responsibilities:
 Workflow rule:
 - This stage exists only to generate one best concept direction and hand off to the prompt stage.`;
 
+const REVISION_SYSTEM_PROMPT = `You are the revision handoff agent for poster generation.
+
+Current stage: REVISION
+
+Available state:
+- requirementsResult is already prepared
+- revisionRequirements: {revisionRequirements}
+- requirementsJson: {requirementsJson}
+- previousDirectionJson: {previousDirectionJson}
+- previousImagePrompt: {previousImagePrompt}
+- previousFinalImageUrl: {previousFinalImageUrl}
+
+Responsibilities:
+1. Call revision_planner exactly once with revisionRequirements
+2. Do not ask questions
+3. Do not answer directly
+4. Do not call any other tool
+
+Workflow rule:
+- This stage exists only to generate a revised concept direction and hand off to the prompt stage.`;
+
 const PROMPT_SYSTEM_PROMPT = `You are the prompt handoff agent for poster generation.
 
 Current stage: PROMPT
 
 Available state:
 - requirementsResult is already prepared
-- conceptDirection is already prepared
+- conceptDirection or revisionConceptDirection is already prepared
 - requirementsJson: {requirementsJson}
-- directionJson: {directionJson}
+- activeDirectionJson: {activeDirectionJson}
+- revisionRequirements: {revisionRequirements}
+- previousImagePrompt: {previousImagePrompt}
 
 Responsibilities:
-1. Call prompt_builder exactly once with requirementsJson and directionJson
+1. Call prompt_builder exactly once with requirementsJson and directionJson=activeDirectionJson
 2. Do not ask questions
 3. Do not answer directly
 4. Do not call any other tool
@@ -169,12 +223,22 @@ export interface OrchestratorState {
   currentStep:
     | 'requirements'
     | 'concept'
+    | 'revision'
     | 'prompt'
     | 'image'
     | 'completed';
+  revisionRequirements?: string;
   requirementsResult?: RequirementExtractorOutput;
   conceptDirection?: ConceptDirection;
+  revisionConceptDirection?: ConceptDirection;
   imagePrompt?: string;
+  previousImagePrompt?: string;
+  previousConceptDirection?: ConceptDirection;
+  previousFinalImage?: {
+    imageUrl: string;
+    mimeType: string;
+    filename: string;
+  };
   finalImage?: {
     imageUrl: string;
     mimeType: string;
@@ -193,9 +257,14 @@ type StepConfig = {
   requires: Array<
     | 'activityId'
     | 'userRequirements'
+    | 'revisionRequirements'
     | 'requirementsResult'
     | 'conceptDirection'
+    | 'revisionConceptDirection'
     | 'imagePrompt'
+    | 'previousImagePrompt'
+    | 'previousConceptDirection'
+    | 'previousFinalImage'
     | 'finalImage'
     | 'finalError'
   >;
@@ -212,19 +281,34 @@ function formatPrompt(
   const directionJson = state.conceptDirection
     ? JSON.stringify(state.conceptDirection)
     : '';
+  const activeDirectionJson = JSON.stringify(getActiveConceptDirection(state) ?? {});
+  const previousDirectionJson = state.previousConceptDirection
+    ? JSON.stringify(state.previousConceptDirection)
+    : '';
   const aspectRatio = state.requirementsResult?.poster?.size ?? '';
 
   return template
     .replace('{activityId}', state.activityId != null ? String(state.activityId) : '')
     .replace('{userRequirements}', state.userRequirements ?? '')
+    .replace('{revisionRequirements}', state.revisionRequirements ?? '')
     .replace('{requirementsJson}', requirementsJson)
     .replace('{directionJson}', directionJson)
+    .replace('{activeDirectionJson}', activeDirectionJson)
+    .replace('{previousDirectionJson}', previousDirectionJson)
     .replace('{imagePrompt}', state.imagePrompt ?? '')
+    .replace('{previousImagePrompt}', state.previousImagePrompt ?? '')
     .replace('{aspectRatio}', aspectRatio)
+    .replace('{previousFinalImageUrl}', state.previousFinalImage?.imageUrl ?? '')
     .replace('{finalImageUrl}', state.finalImage?.imageUrl ?? '')
     .replace('{finalImageMimeType}', state.finalImage?.mimeType ?? '')
     .replace('{finalImageFilename}', state.finalImage?.filename ?? '')
     .replace('{finalError}', state.finalError ?? '');
+}
+
+function getActiveConceptDirection(
+  state: Partial<OrchestratorState>,
+): ConceptDirection | undefined {
+  return state.revisionConceptDirection ?? state.conceptDirection;
 }
 
 export function validateStepState(
@@ -234,7 +318,14 @@ export function validateStepState(
   const requirements: Record<StepKey, StepConfig['requires']> = {
     requirements: ['activityId', 'userRequirements'],
     concept: ['requirementsResult'],
-    prompt: ['requirementsResult', 'conceptDirection'],
+    revision: [
+      'requirementsResult',
+      'revisionRequirements',
+      'previousConceptDirection',
+      'previousImagePrompt',
+      'previousFinalImage',
+    ],
+    prompt: ['requirementsResult'],
     image: ['requirementsResult', 'imagePrompt'],
     completed: [],
   };
@@ -243,6 +334,12 @@ export function validateStepState(
     if (state[key] == null) {
       throw new Error(`${key} must be set before reaching ${step}`);
     }
+  }
+
+  if (step === 'prompt' && !getActiveConceptDirection(state)) {
+    throw new Error(
+      'conceptDirection or revisionConceptDirection must be set before reaching prompt',
+    );
   }
 }
 
@@ -254,6 +351,7 @@ export function createOrchestratorAgent(
     activityService,
   ) as ClientTool;
   const conceptPlannerTool = createConceptPlannerTool() as ClientTool;
+  const revisionPlannerTool = createRevisionPlannerTool() as ClientTool;
   const promptBuilderTool = createPromptBuilderTool() as ClientTool;
   const imageGeneratorTool = createNanoBananaTool() as ClientTool;
 
@@ -270,10 +368,22 @@ export function createOrchestratorAgent(
       requires: ['requirementsResult'],
       toolChoice: 'required',
     },
+    revision: {
+      prompt: REVISION_SYSTEM_PROMPT,
+      tools: [revisionPlannerTool],
+      requires: [
+        'requirementsResult',
+        'revisionRequirements',
+        'previousConceptDirection',
+        'previousImagePrompt',
+        'previousFinalImage',
+      ],
+      toolChoice: 'required',
+    },
     prompt: {
       prompt: PROMPT_SYSTEM_PROMPT,
       tools: [promptBuilderTool],
-      requires: ['requirementsResult', 'conceptDirection'],
+      requires: ['requirementsResult'],
       toolChoice: 'required',
     },
     image: {
@@ -316,6 +426,7 @@ export function createOrchestratorAgent(
     tools: [
       requirementExtractorTool,
       conceptPlannerTool,
+      revisionPlannerTool,
       promptBuilderTool,
       imageGeneratorTool,
     ],
