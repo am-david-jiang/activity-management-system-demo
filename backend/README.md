@@ -31,7 +31,63 @@
 $ pnpm install
 ```
 
-## Compile and run the project
+## 环境变量
+
+项目通过环境变量加载配置，推荐在项目根目录创建 `.env` 文件。
+
+### 通用配置
+
+```env
+PORT=3000
+DB_TYPE=mysql
+```
+
+### JWT 配置
+
+```env
+JWT_SECRET=your_jwt_secret
+JWT_REFRESH_SECRET=your_jwt_refresh_secret
+```
+
+### MySQL 配置
+
+可使用连接串方式：
+
+```env
+DB_TYPE=mysql
+DATABASE_URL=mysql://root:password@127.0.0.1:3306/activity_management_system
+```
+
+或使用分项配置：
+
+```env
+DB_TYPE=mysql
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=password
+MYSQL_DATABASE=activity_management_system
+```
+
+也支持：
+
+```env
+MYSQL_URL=mysql://root:password@127.0.0.1:3306/activity_management_system
+```
+
+### AI 海报生成配置
+
+```env
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_IMAGE_MODEL=gemini-2.5-flash-image
+```
+
+说明：
+
+- `GOOGLE_API_KEY` 用于调用图像生成模型
+- `GOOGLE_IMAGE_MODEL` 可选；未配置时会使用默认候选模型
+
+## 启动项目
 
 ```bash
 # development
@@ -70,7 +126,7 @@ $ mau deploy
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
-## Resources
+- `migrations/1776966235365-001-initialization.ts`
 
 Check out a few resources that may come in handy when working with NestJS:
 
@@ -95,4 +151,41 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+测试文件与源码同目录放置，使用 `.spec.ts` 命名。例如：
+
+- `src/app.controller.spec.ts`
+- `src/poster-gen/agents/orchestrator.agent.spec.ts`
+- `src/poster-gen/service/poster-gen.service.spec.ts`
+
+执行测试：
+
+```bash
+pnpm run test
+```
+
+执行 E2E 测试：
+
+```bash
+pnpm run test:e2e
+```
+
+## 目录结构
+
+```text
+src/
+├── activity/        # 活动、事件、参与人
+├── auth/            # 登录、注册、JWT、权限控制
+├── common/          # 通用拦截器与接口定义
+├── database/        # TypeORM 配置
+├── health/          # 健康检查
+├── poster-gen/      # AI 海报生成
+├── user/            # 用户管理
+├── app.module.ts    # 根模块
+└── main.ts          # 应用入口
+
+migrations/          # 数据库迁移
+```
+
+## 许可证
+
+当前项目在 `package.json` 中标记为 `UNLICENSED`，如需开源或对外发布，请补充正式许可证说明。

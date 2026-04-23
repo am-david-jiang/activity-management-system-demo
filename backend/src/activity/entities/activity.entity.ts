@@ -12,10 +12,10 @@ import { Event } from './event.entity';
 
 @Entity('activities')
 export class Activity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
   id: number;
 
-  @Column({ name: 'activity_name' })
+  @Column({ type: 'varchar', length: 255, name: 'activity_name' })
   activityName: string;
 
   @Column({ type: 'date', name: 'start_date' })
@@ -30,13 +30,13 @@ export class Activity {
   @Column({ type: 'date', name: 'apply_end_date' })
   applyEndDate: Date;
 
-  @Column({ default: 'active' })
+  @Column({ type: 'varchar', length: 32, default: 'active' })
   status: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ type: 'datetime', precision: 6, name: 'updated_at' })
   updatedAt: Date;
 
   @ManyToMany(() => Participant, (participant) => participant.activities)

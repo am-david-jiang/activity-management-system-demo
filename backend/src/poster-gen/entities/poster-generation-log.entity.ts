@@ -3,7 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
+import { Activity } from '../../activity/entities/activity.entity';
 
 export enum PosterGenStatus {
   PENDING = 'pending',
@@ -13,16 +17,17 @@ export enum PosterGenStatus {
 
 @Entity('poster_generation_logs')
 export class PosterGenerationLog {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
   id: number;
 
-  @Column({ name: 'activity_id' })
+  @Index('IDX_poster_generation_logs_activity_id')
+  @Column({ name: 'activity_id', type: 'int', unsigned: true })
   activityId: number;
 
   @Column({ type: 'text' })
   prompt: string;
 
-  @Column({ type: 'text', name: 'image_url', nullable: true })
+  @Column({ type: 'varchar', length: 2048, name: 'image_url', nullable: true })
   imageUrl?: string;
 
   @Column({
@@ -32,15 +37,19 @@ export class PosterGenerationLog {
   })
   status: PosterGenStatus;
 
-  @Column({ default: 0, name: 'retry_count' })
+  @Column({ type: 'int', unsigned: true, default: 0, name: 'retry_count' })
   retryCount: number;
 
   @Column({ type: 'text', name: 'error_message', nullable: true })
   errorMessage?: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true, name: 'completed_at' })
+  @Column({ type: 'datetime', precision: 6, nullable: true, name: 'completed_at' })
   completedAt?: Date;
+
+  @ManyToOne(() => Activity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'activity_id', referencedColumnName: 'id' })
+  activity: Activity;
 }

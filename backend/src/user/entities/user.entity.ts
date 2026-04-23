@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToMany,
   JoinTable,
+  Index,
 } from 'typeorm';
 import { Role } from '../../auth/entities/role.entity';
 
@@ -14,16 +15,17 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Index('IDX_users_email', { unique: true })
+  @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 100 })
   name: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ type: 'datetime', precision: 6, name: 'updated_at' })
   updatedAt: Date;
 
   @ManyToMany(() => Role, (role) => role.users, { eager: true })
