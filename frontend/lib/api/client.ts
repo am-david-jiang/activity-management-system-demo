@@ -1,9 +1,13 @@
 import ky from "ky";
 
-const API_BASE = "http://localhost:8000/api/";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
 const ACCESS_TOKEN_KEY = "auth_access_token";
 const REFRESH_TOKEN_KEY = "auth_refresh_token";
+
+if (!API_BASE) {
+  throw new Error("NEXT_PUBLIC_API_BASE is not configured");
+}
 
 export interface ApiResponse<T> {
   code: number;

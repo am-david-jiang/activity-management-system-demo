@@ -1,125 +1,159 @@
-import { tool } from '@langchain/core/tools';
+import { tool, ToolMessage, type ToolRuntime } from 'langchain';
 import { z } from 'zod';
 import { Logger } from '@nestjs/common';
-import {
-  createPromptBuilderAgent,
-  type PromptBuilderOutput,
-} from '../prompt-builder.agent';
-import {
-  RequirementExtractorSchema,
-  type RequirementExtractorOutput,
-} from '../requirement-extractor';
-import {
-  ConceptDirectionSchema,
-  type ConceptDirection,
-} from '../concept-planner.agent';
+import { Command } from '@langchain/langgraph';
+import { generatePrompt } from '../prompt-builder.agent';
+import type { RequirementExtractorOutput } from '../requirement-extractor';
+import type { ConceptDirection } from '../concept-planner.agent';
 
 const logger = new Logger('PromptBuilderTool');
 
+type PromptStepState = {
+  requirementsResult?: RequirementExtractorOutput;
+  conceptDirection?: ConceptDirection;
+  revisionConceptDirection?: ConceptDirection;
+  revisionRequirements?: string;
+  previousImagePrompt?: string;
+};
+
 /**
- * Tool wrapper for the prompt builder sub-agent.
- * Generates image generation prompts from requirements and concept direction.
+ * State transition tool for the prompt handoff step.
  */
 export function createPromptBuilderTool() {
   return tool(
-    async ({
-      requirementsJson,
-      directionJson,
-    }: {
-      requirementsJson: string;
-      directionJson: string;
-    }): Promise<string> => {
-      logger.log(
-        `Invoking prompt_builder tool with requirementsJson: ${requirementsJson}, directionJson: ${directionJson}`,
-      );
-      let requirements: RequirementExtractorOutput;
-      let direction: ConceptDirection;
+    async (
+      {
+        requirementsJson,
+        directionJson,
+      }: {
+        requirementsJson: string;
+        directionJson: string;
+      },
+      runtime: ToolRuntime<PromptStepState>,
+    ): Promise<Command> => {
+      let requirementsResult = runtime.state.requirementsResult;
+      let conceptDirection =
+        runtime.state.revisionConceptDirection ??
+        runtime.state.conceptDirection;
 
-      try {
-        requirements = RequirementExtractorSchema.parse(
-          JSON.parse(requirementsJson),
-        );
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          throw new Error(`Invalid requirements: ${error.message}`);
+      if (requirementsJson) {
+        try {
+          requirementsResult = JSON.parse(
+            requirementsJson,
+          ) as RequirementExtractorOutput;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Invalid JSON';
+          return new Command({
+            update: {
+              messages: [
+                new ToolMessage({
+                  content: `提示词构建失败：requirementsJson 解析失败，${message}`,
+                  tool_call_id: runtime.toolCallId,
+                  name: 'prompt_builder',
+                }),
+              ],
+              currentStep: 'completed',
+              finalError: `prompt_builder failed: invalid requirementsJson: ${message}`,
+            },
+          });
         }
-        if (error instanceof SyntaxError) {
-          throw new Error(`Invalid JSON string: ${error.message}`);
-        }
-        throw new Error(
-          `Failed to parse requirements: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
       }
 
-      try {
-        direction = ConceptDirectionSchema.parse(JSON.parse(directionJson));
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          throw new Error(`Invalid direction: ${error.message}`);
+      if (directionJson) {
+        try {
+          conceptDirection = JSON.parse(directionJson) as ConceptDirection;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Invalid JSON';
+          return new Command({
+            update: {
+              messages: [
+                new ToolMessage({
+                  content: `提示词构建失败：directionJson 解析失败，${message}`,
+                  tool_call_id: runtime.toolCallId,
+                  name: 'prompt_builder',
+                }),
+              ],
+              currentStep: 'completed',
+              finalError: `prompt_builder failed: invalid directionJson: ${message}`,
+            },
+          });
         }
-        if (error instanceof SyntaxError) {
-          throw new Error(`Invalid JSON string: ${error.message}`);
-        }
-        throw new Error(
-          `Failed to parse direction: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
       }
 
-      try {
-        const agent = createPromptBuilderAgent();
-
-        const input = `Please generate an image generation prompt based on the following information:
-
-## Activity Information
-- Activity Name: ${requirements.activity.name}
-- Start Date: ${requirements.activity.startDate}
-- End Date: ${requirements.activity.endDate}
-- Events:
-${requirements.activity.events.map((e) => `  - ${e.name}: ${e.description} (${e.datetime}, ${e.location})`).join('\n')}
-
-## Poster Requirements
-- Style: ${requirements.poster.style}
-- Theme: ${requirements.poster.theme}
-- Language: ${requirements.poster.language}
-- Color: ${requirements.poster.color}
-- Size: ${requirements.poster.size}
-- Visual Constraints: ${requirements.poster.visualConstraints.join(', ')}
-
-## Concept Direction
-- Style: ${direction.style}
-- Color Palette:
-  - Primary: ${direction.color_palette.primary}
-  - Secondary: ${direction.color_palette.secondary}
-  - Accent: ${direction.color_palette.accent}
-- Visual Elements: ${direction.visual_elements.join(', ')}
-- Layout Hints: ${direction.layout_hints}
-- Title Concept: ${direction.title_concept}`;
-
-        const result = await agent.invoke({
-          messages: [{ role: 'user', content: input }],
+      if (!requirementsResult || !conceptDirection) {
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content:
+                  '提示词构建失败：缺少 requirementsResult 或 conceptDirection 状态',
+                tool_call_id: runtime.toolCallId,
+                name: 'prompt_builder',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError:
+              'prompt_builder failed: missing requirementsResult or conceptDirection',
+          },
         });
+      }
 
-        const output = (result.structuredResponse as PromptBuilderOutput)
-          .prompt;
+      try {
+        logger.log('Invoking prompt_builder handoff');
+        const prompt = await generatePrompt(
+          requirementsResult,
+          conceptDirection,
+          runtime.state.revisionRequirements
+            ? {
+                revisionRequirements: runtime.state.revisionRequirements,
+                previousConceptDirection: runtime.state.conceptDirection,
+                previousImagePrompt: runtime.state.previousImagePrompt,
+              }
+            : undefined,
+        );
 
-        logger.log(`prompt_builder tool returned prompt: ${output}`);
-        return JSON.stringify({ prompt: output });
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: '图像提示词生成完成，已移交到海报出图阶段',
+                tool_call_id: runtime.toolCallId,
+                name: 'prompt_builder',
+              }),
+            ],
+            imagePrompt: prompt,
+            currentStep: 'image',
+          },
+        });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         logger.error(
-          `prompt_builder tool failed: ${error instanceof Error ? error.message : String(error)}`,
+          `prompt_builder handoff failed: ${message}`,
           error instanceof Error ? error.stack : undefined,
         );
-        return JSON.stringify({
-          error: `prompt_builder failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: `图像提示词生成失败：${message}`,
+                tool_call_id: runtime.toolCallId,
+                name: 'prompt_builder',
+              }),
+            ],
+            currentStep: 'completed',
+            finalError: `prompt_builder failed: ${message}`,
+          },
         });
       }
     },
     {
       name: 'prompt_builder',
       description:
-        'Generate detailed image generation prompt from requirements and concept direction. ' +
-        'Input: requirementsJson (string), directionJson (string). ' +
-        'Output: JSON with prompt (string) for image generation.',
+        'Generate detailed image generation prompt from requirements and concept direction, then hand off to image generation.',
       schema: z.object({
         requirementsJson: z
           .string()

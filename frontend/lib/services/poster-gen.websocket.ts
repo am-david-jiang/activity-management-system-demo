@@ -22,6 +22,7 @@ export interface GeneratingMessage {
 
 export interface SuccessMessage {
   type: "success";
+  sessionId: string;
   filename: string;
   mimeType: string;
   message: string;
@@ -47,7 +48,17 @@ export interface GenerateRequest {
   requirements: string;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8000";
+export interface ReviseRequest {
+  type: "revise";
+  sessionId: string;
+  revisionRequirements: string;
+}
+
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
+
+if (!WS_URL) {
+  throw new Error("NEXT_PUBLIC_WS_URL is not configured");
+}
 
 export class PosterGenWebSocket {
   private socket: Socket | null = null;
@@ -155,6 +166,20 @@ export class PosterGenWebSocket {
     };
 
     this.socket.emit("generate", request);
+  }
+
+  revise(sessionId: string, revisionRequirements: string): void {
+    if (!this.socket?.connected) {
+      throw new Error("WebSocket is not connected");
+    }
+
+    const request: ReviseRequest = {
+      type: "revise",
+      sessionId,
+      revisionRequirements,
+    };
+
+    this.socket.emit("revise", request);
   }
 
   onMessage(callback: (message: WsMessage) => void): () => void {

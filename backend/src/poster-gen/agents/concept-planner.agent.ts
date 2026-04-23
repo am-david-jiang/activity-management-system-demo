@@ -62,8 +62,19 @@ export async function generateConceptDirection(
   model?: string,
 ): Promise<ConceptDirection> {
   const agent = createConceptPlannerAgent(model);
+  const input = buildConceptPlannerInput(requirements);
 
-  const input = `请基于以下活动信息生成海报创意方向：
+  const result = await agent.invoke({
+    messages: [{ role: 'user', content: input }],
+  });
+
+  return (result.structuredResponse as ConceptPlannerOutput).direction;
+}
+
+export function buildConceptPlannerInput(
+  requirements: RequirementExtractorOutput,
+): string {
+  return `请基于以下活动信息生成海报创意方向：
 
 活动名称：${requirements.activity.name}
 活动时间：${requirements.activity.startDate} 至 ${requirements.activity.endDate}
@@ -77,10 +88,4 @@ ${requirements.activity.events.map((e) => `- ${e.name}: ${e.description}`).join(
 颜色要求：${requirements.poster.color}
 尺寸：${requirements.poster.size}
 视觉约束：${requirements.poster.visualConstraints.join('、')}`;
-
-  const result = await agent.invoke({
-    messages: [{ role: 'user', content: input }],
-  });
-
-  return (result.structuredResponse as ConceptPlannerOutput).direction;
 }

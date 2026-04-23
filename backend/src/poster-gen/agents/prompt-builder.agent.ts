@@ -1,7 +1,11 @@
 import { createAgent } from 'langchain';
+import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import type { RequirementExtractorOutput } from './requirement-extractor';
 import type { ConceptDirection } from './concept-planner.agent';
+
+const logger = new Logger('PromptBuilderAgent');
+const MAX_LOG_PROMPT_LENGTH = 500;
 
 const SYSTEM_PROMPT = `You are a professional activity poster prompt builder expert. Your task is to generate a detailed Chinese image generation prompt based on the provided activity information, poster requirements, and concept direction.
 
@@ -31,6 +35,22 @@ export const PromptBuilderSchema = z.object({
 
 export type PromptBuilderOutput = z.infer<typeof PromptBuilderSchema>;
 
+export type PromptBuilderRevisionContext = {
+  revisionRequirements: string;
+  previousConceptDirection?: ConceptDirection;
+  previousImagePrompt?: string;
+};
+
+function formatPromptForLog(prompt: string): string {
+  const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
+
+  if (normalizedPrompt.length <= MAX_LOG_PROMPT_LENGTH) {
+    return normalizedPrompt;
+  }
+
+  return `${normalizedPrompt.slice(0, MAX_LOG_PROMPT_LENGTH)}...`;
+}
+
 export function createPromptBuilderAgent(model: string = 'openai:gpt-5.4') {
   const agent = createAgent({
     model,
@@ -45,11 +65,49 @@ export function createPromptBuilderAgent(model: string = 'openai:gpt-5.4') {
 export async function generatePrompt(
   requirements: RequirementExtractorOutput,
   direction: ConceptDirection,
+  revisionContext?: PromptBuilderRevisionContext,
   model?: string,
 ): Promise<string> {
   const agent = createPromptBuilderAgent(model);
 
-  const input = `Please generate an image generation prompt based on the following information:
+  const input = buildPromptBuilderInput(
+    requirements,
+    direction,
+    revisionContext,
+  );
+
+  const result = await agent.invoke({
+    messages: [{ role: 'user', content: input }],
+  });
+
+  const prompt = (result.structuredResponse as PromptBuilderOutput).prompt;
+  logger.log(`Generated prompt result: ${formatPromptForLog(prompt)}`);
+
+  return prompt;
+}
+
+export function buildPromptBuilderInput(
+  requirements: RequirementExtractorOutput,
+  direction: ConceptDirection,
+  revisionContext?: PromptBuilderRevisionContext,
+): string {
+  const revisionSection = revisionContext
+    ? [
+        '',
+        '## Revision Context',
+        `- User Revision Requirements: ${revisionContext.revisionRequirements}`,
+        `- Previous Concept Style: ${revisionContext.previousConceptDirection?.style ?? 'N/A'}`,
+        `- Previous Layout Hints: ${revisionContext.previousConceptDirection?.layout_hints ?? 'N/A'}`,
+        `- Previous Visual Elements: ${revisionContext.previousConceptDirection?.visual_elements?.join(', ') ?? 'N/A'}`,
+        `- Previous Title Concept: ${revisionContext.previousConceptDirection?.title_concept ?? 'N/A'}`,
+        `- Previous Image Prompt: ${revisionContext.previousImagePrompt ?? 'N/A'}`,
+        '',
+        'Please keep the core activity information consistent, preserve useful parts from the previous version when appropriate, and apply the new revision requirements clearly.',
+        'When the next step receives the previous poster image, treat this as an edit request: keep the confirmed composition, subject, and visual identity unless the revision explicitly asks to change them. Avoid rewriting the whole poster from scratch.',
+      ].join('\n')
+    : '';
+
+  return `Please generate an image generation prompt based on the following information:
 
 ## Activity Information
 - Activity Name: ${requirements.activity.name}
@@ -74,11 +132,5 @@ ${requirements.activity.events.map((e) => `  - ${e.name}: ${e.description} (${e.
   - Accent: ${direction.color_palette.accent}
 - Visual Elements: ${direction.visual_elements.join(', ')}
 - Layout Hints: ${direction.layout_hints}
-- Title Concept: ${direction.title_concept}`;
-
-  const result = await agent.invoke({
-    messages: [{ role: 'user', content: input }],
-  });
-
-  return (result.structuredResponse as PromptBuilderOutput).prompt;
+- Title Concept: ${direction.title_concept}${revisionSection}`;
 }
