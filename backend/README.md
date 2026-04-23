@@ -1,6 +1,6 @@
 # 活动管理系统后端
 
-基于 NestJS 11、TypeORM 和 MySQL/PostgreSQL 的活动管理系统后端服务，提供用户、认证、活动、事件、参与人以及 AI 海报生成能力。
+基于 NestJS 11、TypeORM 和 MySQL 的活动管理系统后端服务，提供用户、认证、活动、事件、参与人以及 AI 海报生成能力。
 
 ## 项目简介
 
@@ -23,12 +23,12 @@
 
 - NestJS 11
 - TypeORM 0.3
-- MySQL / PostgreSQL
+- MySQL
 - Passport JWT
 - class-validator / class-transformer
 - Socket.IO
 - LangChain / LangGraph
-- Google 图像模型接口（用于海报生成）
+- Google 图像模型接口
 
 ## 功能模块
 
@@ -95,9 +95,7 @@
 
 ### 5. 海报生成模块 `poster-gen`
 
-该模块通过 WebSocket 提供 AI 海报生成与修改能力，命名空间为：
-
-`/poster-gen`
+该模块通过 WebSocket 提供 AI 海报生成与修改能力，命名空间为 `/poster-gen`。
 
 支持事件：
 
@@ -111,6 +109,88 @@
 - `success`
 - `success_buffer`
 - `error`
+
+## 海报生成 Agent 架构
+
+海报生成能力由三层协作完成：
+
+- `PosterGenGateway` 负责 WebSocket 连接、事件接收和消息回传
+- `PosterGenService` 负责会话管理、状态同步、日志落库和 Agent 调度
+- `poster-gen/agents` 负责需求提取、创意规划、提示词构建和图片生成
+
+生成链路与修改链路共享同一套编排状态，只是在起始步骤上不同：
+
+- 首次生成：`requirements -> concept -> prompt -> image -> completed`
+- 二次修改：`revision -> prompt -> image -> completed`
+
+```mermaid
+flowchart TD
+    A[Frontend Poster Page] -->|WebSocket /poster-gen generate| B[PosterGenGateway]
+    A -->|WebSocket /poster-gen revise| B
+    B --> C[PosterGenService]
+    C --> D[Session State Map]
+    C --> E[LangGraph MemorySaver]
+    C --> F[(PosterGenerationLog Repository)]
+    C --> G[Orchestrator Agent]
+
+    G --> H[requirement_extractor]
+    H --> I[ActivityService]
+
+    G --> J[concept_planner]
+    G --> K[revision_planner]
+    G --> L[prompt_builder]
+    G --> M[generate_image_nano_banana]
+
+    M --> N[Google Image Model]
+
+    H --> G
+    J --> G
+    K --> G
+    L --> G
+    M --> G
+
+    G --> C
+    C -->|tool_call / generating / success / error| B
+    B -->|WebSocket events| A
+```
+
+读图说明：
+
+- 前端通过 `/poster-gen` 命名空间发送 `generate` 或 `revise` 事件。
+- `PosterGenGateway` 将请求交给 `PosterGenService`，后者初始化或复用会话状态，并驱动编排 Agent。
+- `requirement_extractor` 会结合 `ActivityService` 拉取的活动信息与用户输入，生成结构化海报需求。
+- `concept_planner` 与 `revision_planner` 分别负责首次生成和二次修改时的创意方向规划。
+- `prompt_builder` 负责把结构化需求和创意方向转成最终出图提示词。
+- `generate_image_nano_banana` 调用 Google 图像模型生成海报图片，并将结果回写到编排状态。
+- 服务层会向客户端持续回传工具调用、生成进度、最终结果或错误信息，并记录海报生成日志。
+
+### Agent 职责拆分
+
+- `requirement_extractor`
+  - 输入活动 ID 与用户需求
+  - 读取最新活动信息
+  - 输出结构化海报需求数据
+- `concept_planner`
+  - 基于结构化需求生成最佳海报创意方向
+- `revision_planner`
+  - 基于上一轮创意方向、上一轮图片和本轮修改意见生成新方向
+- `prompt_builder`
+  - 生成最终图像提示词
+  - 修改场景下保留上一轮已确认的构图与视觉主体
+- `generate_image_nano_banana`
+  - 调用 Google 图像模型生成或编辑海报
+  - 根据海报尺寸推断宽高比
+  - 将生成文件落到本地临时目录并回传给上层
+
+### 会话与状态管理
+
+- 编排 Agent 使用 LangGraph `MemorySaver` 保存线程级状态。
+- `PosterGenService` 维护 `sessionId -> OrchestratorState` 映射，支撑同一会话内的继续修改。
+- 修改海报时会复用上一轮的：
+  - `conceptDirection`
+  - `imagePrompt`
+  - `finalImage`
+- 若会话不存在，服务端会直接返回“未找到对应会话，请先完成一次海报生成”。
 
 ## 返回格式
 
@@ -136,7 +216,7 @@ HTTP 接口统一通过全局响应拦截器包装为如下结构：
 
 - Node.js 18 及以上
 - pnpm
-- MySQL 或 PostgreSQL
+- MySQL 8.0 及以上
 
 如果启用 AI 海报生成，还需要可用的 Google API Key。
 
@@ -150,46 +230,25 @@ pnpm install
 
 项目通过环境变量加载配置，推荐在项目根目录创建 `.env` 文件。
 
-### 通用配置
+### 服务端基础配置
 
 ```env
 PORT=3000
-DB_TYPE=mysql
-```
-
-### JWT 配置
-
-```env
 JWT_SECRET=your_jwt_secret
 JWT_REFRESH_SECRET=your_jwt_refresh_secret
 ```
-
-### PostgreSQL 配置
-
-```env
-DB_TYPE=postgres
-DATABASE_URL=postgresql://user:password@host:5432/database
-DB_SSL=false
-```
-
-说明：
-
-- 当 `DB_TYPE` 不是 `mysql` 时，默认按 PostgreSQL 处理
-- `DB_SSL` 默认倾向于启用，若本地开发不需要 SSL，建议显式设置为 `false`
 
 ### MySQL 配置
 
 可使用连接串方式：
 
 ```env
-DB_TYPE=mysql
 DATABASE_URL=mysql://root:password@127.0.0.1:3306/activity_management_system
 ```
 
-或使用分项配置：
+也可以使用分项配置：
 
 ```env
-DB_TYPE=mysql
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_USER=root
@@ -197,11 +256,17 @@ MYSQL_PASSWORD=password
 MYSQL_DATABASE=activity_management_system
 ```
 
-也支持：
+兼容变量：
 
 ```env
 MYSQL_URL=mysql://root:password@127.0.0.1:3306/activity_management_system
 ```
+
+说明：
+
+- 代码会优先读取 `DATABASE_URL`，其次读取 `MYSQL_URL`。
+- 未提供连接串时，会回退到 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。
+- TypeORM 当前固定使用 MySQL 连接，字符集为 `utf8mb4`，并关闭 `synchronize`。
 
 ### AI 海报生成配置
 
@@ -212,8 +277,8 @@ GOOGLE_IMAGE_MODEL=gemini-2.5-flash-image
 
 说明：
 
-- `GOOGLE_API_KEY` 用于调用图像生成模型
-- `GOOGLE_IMAGE_MODEL` 可选；未配置时会使用默认候选模型
+- `GOOGLE_API_KEY` 用于调用图像生成模型。
+- `GOOGLE_IMAGE_MODEL` 可选；未配置时会使用默认候选模型。
 
 ## 启动项目
 
@@ -221,7 +286,7 @@ GOOGLE_IMAGE_MODEL=gemini-2.5-flash-image
 # 普通启动
 pnpm run start
 
-# 开发模式（推荐）
+# 开发模式
 pnpm run start:dev
 
 # 调试模式
@@ -243,6 +308,10 @@ pnpm run test             # 单元测试
 pnpm run test:watch       # 监听模式测试
 pnpm run test:cov         # 测试覆盖率
 pnpm run test:e2e         # 端到端测试
+pnpm run migration:generate
+pnpm run migration:run
+pnpm run migration:revert
+pnpm run migration:show
 ```
 
 ## 数据库迁移
@@ -256,9 +325,16 @@ pnpm run migration:revert
 pnpm run migration:show
 ```
 
+数据库规范说明：
+
+- 迁移文件位于 `src/migrations/`
+- 当前初始化迁移为 MySQL DDL，表、索引和外键均面向 MySQL
+- 推荐本地开发数据库字符集保持为 `utf8mb4`
+- 表结构变更应优先通过迁移管理，不依赖 `synchronize`
+
 当前仓库中已包含初始化迁移文件：
 
-- `src/migrations/1776541755428-InitialSchema.ts`
+- `src/migrations/1776968164041-InitialSchema.ts`
 
 ## 开发说明
 
@@ -317,7 +393,3 @@ src/
 ├── app.module.ts    # 根模块
 └── main.ts          # 应用入口
 ```
-
-## 许可证
-
-当前项目在 `package.json` 中标记为 `UNLICENSED`，如需开源或对外发布，请补充正式许可证说明。
