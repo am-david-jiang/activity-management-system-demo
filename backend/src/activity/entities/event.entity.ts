@@ -4,12 +4,13 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Activity } from './activity.entity';
 
 @Entity('events')
 export class Event {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
   id: number;
 
   @Column({ type: 'varchar', length: 140 })
@@ -18,19 +19,22 @@ export class Event {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'timestamp', name: 'start_date' })
+  @Column({ type: 'datetime', precision: 6, name: 'start_date' })
   startDate: Date;
 
-  @Column({ type: 'timestamp', name: 'end_date' })
+  @Column({ type: 'datetime', precision: 6, name: 'end_date' })
   endDate: Date;
 
   @Column({ type: 'varchar', length: 255 })
   address: string;
 
-  @ManyToOne(() => Activity, (activity) => activity.events)
+  @ManyToOne(() => Activity, (activity) => activity.events, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'activity_id' })
   activity: Activity;
 
-  @Column({ name: 'activity_id' })
+  @Index('IDX_events_activity_id')
+  @Column({ name: 'activity_id', type: 'int', unsigned: true })
   activityId: number;
 }

@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 
@@ -14,24 +15,29 @@ export class Credential {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255 })
   password: string;
 
+  @Index('IDX_credentials_refresh_token', { unique: true })
   @Column({
     name: 'refresh_token',
     type: 'varchar',
+    length: 255,
     nullable: true,
-    unique: true,
   })
   refreshToken: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ type: 'datetime', precision: 6, name: 'updated_at' })
   updatedAt: Date;
 
+  @Index('UQ_credentials_user_id', { unique: true })
+  @Column({ name: 'user_id', type: 'char', length: 36 })
+  userId: string;
+
   @OneToOne(() => User, (user) => user.id, { onDelete: 'CASCADE' })
-  @JoinColumn()
+  @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
   user: User;
 }

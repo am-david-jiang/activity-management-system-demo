@@ -13,8 +13,10 @@ async function bootstrap() {
     }),
   );
   app.useGlobalInterceptors(new ResponseInterceptor());
-  app.setGlobalPrefix('api');
-  app.enableCors();
+  app.setGlobalPrefix('ams-demo/api');
+  app.enableCors({
+    origin: 'https://activity-management-system-eta.vercel.app',
+  });
   await app.listen(process.env.PORT ?? 3000);
 }
 

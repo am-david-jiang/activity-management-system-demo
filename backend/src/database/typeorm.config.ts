@@ -1,6 +1,5 @@
 import { DataSourceOptions } from 'typeorm';
 import { MysqlConnectionOptions } from 'typeorm/driver/mysql/MysqlConnectionOptions';
-import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import { User } from '../user/entities/user.entity';
 import { Credential } from '../auth/entities/credential.entity';
 import { Role } from '../auth/entities/role.entity';
@@ -8,8 +7,6 @@ import { Activity } from '../activity/entities/activity.entity';
 import { Event } from '../activity/entities/event.entity';
 import { Participant } from '../activity/entities/participant.entity';
 import { PosterGenerationLog } from '../poster-gen/entities/poster-generation-log.entity';
-
-type SupportedDatabase = 'postgres' | 'mysql';
 
 const entities = [
   User,
@@ -21,22 +18,7 @@ const entities = [
   PosterGenerationLog,
 ];
 
-const migrations = ['src/migrations/*.ts'];
-
-function getDatabaseType(): SupportedDatabase {
-  return process.env.DB_TYPE?.toLowerCase() === 'mysql' ? 'mysql' : 'postgres';
-}
-
-function getPostgresOptions(): PostgresConnectionOptions {
-  return {
-    type: 'postgres',
-    url: process.env.DATABASE_URL,
-    ssl: process.env.DB_SSL === 'false' ? false : true,
-    entities,
-    migrations,
-    synchronize: false,
-  };
-}
+const migrations = ['migrations/*.{ts,js}'];
 
 function getMysqlOptions(): MysqlConnectionOptions {
   const databaseUrl = process.env.DATABASE_URL ?? process.env.MYSQL_URL;
@@ -67,7 +49,5 @@ function getMysqlOptions(): MysqlConnectionOptions {
 }
 
 export function getTypeOrmConfig(): DataSourceOptions {
-  return getDatabaseType() === 'mysql'
-    ? getMysqlOptions()
-    : getPostgresOptions();
+  return getMysqlOptions();
 }
